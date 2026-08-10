@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  password        String
+  name            String
+  resetToken      String?
+  resetExpires    DateTime?
+  preferredBrands String?
+  budgetMin       Float?
+  budgetMax       Float?
+  favoriteColors  String?
+  shoeSize        String?
+  clothingSize    String?
+  persona         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  searchHistory       SearchHistory[]
+  wishlist            Wishlist[]
+  comparisons         Comparison[]
+  aiMemory            AIMemory?
+  analyticsEvents     AnalyticsEvent[]
+  shoppingInsights    ShoppingInsight?
+}
+
+model Product {
+  id              String   @id @default(uuid())
+  name            String
+  brand           String
+  category        String
+  subcategory     String?
+  price           Float
+  originalPrice   Float?
+  description     String
+  image           String
+  images          String?
+  rating          Float    @default(0)
+  reviews         Int      @default(0)
+  reviewSamples   String?
+
+  comfortScore    Float    @default(0)
+  walkingScore    Float    @default(0)
+  runningScore    Float    @default(0)
+  winterScore     Float    @default(0)
+  durabilityScore Float    @default(0)
+  waterproof      Boolean  @default(false)
+  wideFeet        Boolean  @default(false)
+  weight          Float?
+  colors          String?
+  sizes           String?
+  specifications  String?
+  batteryScore    Float?
+  warrantyScore   Float?
+
+  features        String?
+  pros            String?
+  cons            String?
+  affiliateLink   String?
+  inStock         Boolean  @default(true)
+
+  returnRate      Float?
+  releaseDate    DateTime?
+  expectedSuccessor String?
+  marketplace     String?
+  stockLevel      Int?
+
+  source         String   @default("local")
+  asin           String?
+  productUrl     String?
+  currency       String   @default("INR")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  wishlist        Wishlist[]
+  priceHistory    PriceHistory[]
+  productAccessories Accessory[]    @relation("ProductAccessories")
+  accessoryOf     Accessory[]      @relation("AccessoryProduct")
+  bundleItems     BundleItem[]
+}
+
+model AmazonCache {
+  id        String   @id @default(uuid())
+  cacheKey  String   @unique
+  data      Json
+  fetchedAt DateTime @default(now())
+
+  @@index([fetchedAt])
+}
+
+model PriceHistory {
+  id        String   @id @default(uuid())
+  productId String
+  price     Float
+  date      DateTime @default(now())
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model SearchHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  prompt    String
+  intent    String?
+  results   String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Wishlist {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model Comparison {
+  id         String   @id @default(uuid())
+  userId     String
+  name       String?
+  productIds String
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AIMemory {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  preferredBrands  String?
+  dislikedBrands   String?
+  budgetMin        Float?
+  budgetMax        Float?
+  favoriteColors   String?
+  sizes            String?
+  favoriteCategories String?
+  previousProductIds String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  userId    String?
+  eventType String
+  data      String?
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+model ShoppingInsight {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  monthlySavings       Float    @default(0)
+  moneySaved           Float    @default(0)
+  wishlistValue        Float    @default(0)
+  totalDecisions       Int      @default(0)
+  accurateDecisions    Int      @default(0)
+  recommendationClicks Int      @default(0)
+  totalSearches        Int      @default(0)
+  comparisonUsage      Int      @default(0)
+  sessionCount         Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Bundle {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  category    String?
+  budgetTotal Float?
+  premiumTotal Float?
+  bestValueTotal Float?
+  type        String?
+  items       String?
+  createdAt   DateTime @default(now())
+
+  bundleItems BundleItem[]
+}
+
+model BundleItem {
+  id        String   @id @default(uuid())
+  bundleId  String
+  productId String
+  role      String?
+  tier      String?
+
+  bundle    Bundle   @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([bundleId])
+}
+
+model Accessory {
+  id               String   @id @default(uuid())
+  productId        String
+  accessoryProductId String
+  type             String?
+  score            Float?
+  createdAt        DateTime @default(now())
+
+  product          Product  @relation("ProductAccessories", fields: [productId], references: [id], onDelete: Cascade)
+  accessoryProduct Product  @relation("AccessoryProduct", fields: [accessoryProductId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}

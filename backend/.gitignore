@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.production
+.env.local
+logs/
+*.log
+dist/
+.DS_Store
+
+# Seeded marketplace catalog (already in Supabase — do not commit/redistribute)
+data/
+src/products_full.json

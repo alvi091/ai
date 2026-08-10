@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets (never commit)
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Builds / output
+dist/
+build/
+*.log
+logs/
+npm-debug.log*
+yarn-error.log*
+
+# Seeded catalog (already in Supabase — do not commit/redistribute)
+backend/data/
+
+# Mobile app lives in its own repo
+AiBuyingAgentMobile/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android / iOS
+android/app/build/
+android/build/
+android/.gradle/
+ios/Pods/
+ios/build/
+*.keystore
+*.jks
+
+# Editor
+.vscode/
+.idea/

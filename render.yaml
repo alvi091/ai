@@ -1,0 +1,33 @@
+# Render Blueprint — auto-provisions the backend web service.
+# Docs: https://render.com/docs/blueprint-spec
+# This file MUST live at the root of the repository (it does now).
+# The backend source itself is in the /backend subfolder (rootDir below).
+services:
+  - type: web
+    name: ai-buying-agent-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install && npx prisma generate
+    # db push syncs the Prisma schema to Supabase on boot (free tier has no preDeployCommand).
+    # It is safe/idempotent; it will refuse destructive changes rather than drop data.
+    startCommand: npx prisma db push --skip-generate && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20"
+      # Set in Render dashboard -> Environment (after service is created):
+      #   DATABASE_URL  -> your Supabase Postgres connection string
+      #   JWT_SECRET    -> a long random string (or keep the generated one)
+      #   GEMINI_API_KEY-> your Google AI Studio key
+      #   CORS_ORIGIN   -> your web app URL (only needed for the web frontend)
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false

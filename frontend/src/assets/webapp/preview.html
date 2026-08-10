@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ayymus — webapp logo preview</title>
+<style>
+  body { margin:0; font-family: -apple-system, Arial, sans-serif; }
+  .navbar { display:flex; align-items:center; justify-content:space-between; padding:0 24px; height:64px; }
+  .light { background:#FFFFFF; border-bottom:1px solid #eee; }
+  .dark { background:#0A0A0A; }
+  img.logo { height:28px; }
+  .navlinks { display:flex; gap:24px; font-size:14px; }
+  .light .navlinks { color:#1C1C3C; }
+  .dark .navlinks { color:#F2F3F5; }
+  .sidebar { width:64px; height:100vh; display:flex; flex-direction:column; align-items:center; padding-top:16px; gap:16px; position:fixed; top:0; }
+  .row { display:flex; }
+  .col { flex:1; }
+</style>
+</head>
+<body>
+
+<div class="navbar light">
+  <img class="logo" src="logo-horizontal-dark-h64@2x.png">
+  <div class="navlinks"><span>Shop</span><span>Deals</span><span>Orders</span><span>Account</span></div>
+</div>
+
+<div class="navbar dark">
+  <img class="logo" src="logo-horizontal-white-h64@2x.png">
+  <div class="navlinks"><span>Shop</span><span>Deals</span><span>Orders</span><span>Account</span></div>
+</div>
+
+<div class="row" style="margin-top:24px; padding:0 24px;">
+  <div class="col">
+    <p style="font-family:sans-serif;color:#666;font-size:12px;">Collapsed sidebar icon (light bg)</p>
+    <div style="background:#fff;border:1px solid #eee;width:64px;padding:16px 0;display:flex;justify-content:center;">
+      <img src="logo-icon-dark-32.png" height="28">
+    </div>
+  </div>
+  <div class="col">
+    <p style="font-family:sans-serif;color:#666;font-size:12px;">Collapsed sidebar icon (dark bg)</p>
+    <div style="background:#0A0A0A;width:64px;padding:16px 0;display:flex;justify-content:center;">
+      <img src="logo-icon-white-32.png" height="28">
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

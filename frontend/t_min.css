@@ -1,0 +1,1 @@
+@tailwind base;@tailwind components;@tailwind utilities;@layer components { .a { @apply bg-danger/30; } }
