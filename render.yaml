@@ -90,9 +90,13 @@ services:
     plan: standard
     buildCommand: >-
       npm ci --include=dev &&
-      npx prisma generate &&
-      npx playwright install --with-deps chromium
-    startCommand: npm run start:worker
+      npx prisma generate
+    # Chromium is installed at RUNTIME (not build): Render's persistent disk is
+    # only mounted at runtime, and `playwright install --with-deps` needs root
+    # (build user can't `su`). Browsers persist on the disk between deploys.
+    startCommand: >-
+      npx playwright install chromium &&
+      node src/worker.js
     disk:
       name: playwright-cache
       mountPath: /opt/playwright-cache
@@ -104,6 +108,8 @@ services:
         value: "20"
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: /opt/playwright-cache
+      - key: PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS
+        value: "1"
       - key: NODE_OPTIONS
         value: --max-old-space-size=2048
       - key: DATABASE_URL
