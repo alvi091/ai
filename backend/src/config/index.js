@@ -90,7 +90,7 @@ module.exports = {
   },
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 900000,
-    max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
+    max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 3000,
   },
   smtp: {
     host: process.env.SMTP_HOST || 'smtp.gmail.com',

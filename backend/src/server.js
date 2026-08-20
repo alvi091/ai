@@ -30,6 +30,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 if (config.nodeEnv === 'production') {
+  // Health checks (Render's monitor + CDN probes) must never be throttled.
+  const skipHealth = (req) => req.path === '/api/health';
   let limiter;
   try {
     if (process.env.REDIS_URL) {
@@ -41,6 +43,7 @@ if (config.nodeEnv === 'production') {
         max: config.rateLimit.max,
         standardHeaders: true,
         legacyHeaders: false,
+        skip: skipHealth,
         store: new RedisStore({ sendCommand: (...args) => redis.call(...args) }),
         message: { error: 'Too many requests, please try again later' },
       });
@@ -51,6 +54,7 @@ if (config.nodeEnv === 'production') {
     limiter = rateLimit({
       windowMs: config.rateLimit.windowMs,
       max: config.rateLimit.max,
+      skip: skipHealth,
       message: { error: 'Too many requests, please try again later' },
     });
   }

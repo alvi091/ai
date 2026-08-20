@@ -81,6 +81,12 @@ services:
         value: "2"
       - key: ANALYSIS_CACHE_TTL_MS
         value: "43200000"
+      # Per-IP burst budget: 3000 req / 15 min (~5-8 req/s sustained). /api/health
+      # is exempted in code, so Render's monitor never burns user budget.
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "900000"
+      - key: RATE_LIMIT_MAX
+        value: "3000"
 
   # ---------- Background worker ----------
   - type: worker
