@@ -33,10 +33,52 @@ module.exports = {
     minHtmlBytes: parseInt(process.env.CRAWL_MIN_HTML_BYTES, 10) || 8000,
     maxHtmlBytes: parseInt(process.env.CRAWL_MAX_HTML_BYTES, 10) || 6 * 1024 * 1024,
     maxReviews: parseInt(process.env.CRAWL_MAX_REVIEWS, 10) || 60,
+    // Flipkart deep fetch: how many review comments to pull via the reviews API.
+    // 0 = fetch ALL available; positive = cap. Only used for flipkart products.
+    flipkartReviews: process.env.FLIPKART_MAX_REVIEWS === '0'
+      ? 0
+      : parseInt(process.env.FLIPKART_MAX_REVIEWS, 10) || 0,
+    // Myntra deep fetch: same convention — 0 = fetch ALL written comments,
+    // positive = cap. Only used for myntra products.
+    myntraReviews: process.env.MYNTRA_MAX_REVIEWS === '0'
+      ? 0
+      : parseInt(process.env.MYNTRA_MAX_REVIEWS, 10) || 0,
+    // Amazon.in deep fetch: 0 = fetch ALL server-rendered + reachable review
+    // pages; positive = cap. Only used for amazon products.
+    amazonReviews: process.env.AMAZON_MAX_REVIEWS === '0'
+      ? 0
+      : parseInt(process.env.AMAZON_MAX_REVIEWS, 10) || 0,
+    // Ajio deep fetch: 0 = fetch ALL embedded/API comments. Only used for ajio.
+    ajioReviews: process.env.AJIO_MAX_REVIEWS === '0'
+      ? 0
+      : parseInt(process.env.AJIO_MAX_REVIEWS, 10) || 0,
+    // Nykaa deep fetch: 0 = fetch ALL gateway reviews. Only used for nykaa.
+    nykaaReviews: process.env.NYKAA_MAX_REVIEWS === '0'
+      ? 0
+      : parseInt(process.env.NYKAA_MAX_REVIEWS, 10) || 0,
+    // Meesho deep fetch: 0 = fetch ALL __NEXT_DATA__/API reviews. Only used for meesho.
+    meeshoReviews: process.env.MEESHO_MAX_REVIEWS === '0'
+      ? 0
+      : parseInt(process.env.MEESHO_MAX_REVIEWS, 10) || 0,
   },
   analysis: {
     llmEnabled: process.env.ANALYSIS_LLM_ENABLED !== 'false',
     allowGenericSites: process.env.ANALYZE_ALLOW_GENERIC === 'true',
+    // When REDIS_URL is present, POST /api/analyze enqueues a BullMQ job and
+    // returns a jobId (the frontend polls for the report). Only falls back to
+    // running inline when the queue is unavailable (local dev without Redis).
+    queueEnabled: process.env.ANALYZE_QUEUE_ENABLED !== 'false',
+    // Max concurrent inline analyses on a single web instance (guard against
+    // OOM when the queue is unavailable). Saturated requests get HTTP 429.
+    inlineMax: parseInt(process.env.ANALYZE_INLINE_MAX, 10) || 3,
+    // Best-effort cap on ACTIVE analyses across ALL worker instances (shared
+    // via Redis). Bunches a bit on nodes churn but keeps browsers from
+    // exhausting memory on the box.
+    globalMax: parseInt(process.env.ANALYZE_GLOBAL_MAX, 10) || 16,
+    workerConcurrency: parseInt(process.env.ANALYZE_WORKER_CONCURRENCY, 10) || 3,
+  },
+  redis: {
+    url: process.env.REDIS_URL || '',
   },
   amazon: {
     rapidApiKey: process.env.RAPIDAPI_KEY || '',

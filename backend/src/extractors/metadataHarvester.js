@@ -88,7 +88,8 @@ function fromJsonLd(products) {
     availability: offer.availability ? String(offer.availability).split('/').pop() : null,
     availabilityStaged: offer.availability ? String(offer.availability) : null,
     ratingValue: num(agg.ratingValue) != null ? num(agg.ratingValue) : null,
-    ratingCount: num(agg.reviewCount) != null ? num(agg.reviewCount) : null,
+    ratingCount: num(agg.ratingCount) != null ? num(agg.ratingCount) : (num(agg.reviewCount) != null ? num(agg.reviewCount) : null),
+    reviewCount: num(agg.reviewCount) != null ? num(agg.reviewCount) : null,
     reviews: asArray(p.review).map((r) => ({
       author: r.author && (r.author.name || r.author) ? (typeof r.author === 'object' ? r.author.name : r.author) : null,
       rating: r.reviewRating ? num(r.reviewRating.ratingValue) : null,
@@ -164,6 +165,7 @@ function harvest($, baseUrl) {
     availability: ld.availability || null,
     ratingValue: ld.ratingValue != null ? ld.ratingValue : micro.ratingValue,
     ratingCount: ld.ratingCount != null ? ld.ratingCount : micro.ratingCount,
+    reviewCount: ld.reviewCount != null ? ld.reviewCount : null,
     reviews: ld.reviews || [],
     siteName: ogData.siteName || null,
     pageType: ogData.type || null,

@@ -65,6 +65,7 @@ export const buyAnalysis = {
 
 export const analyzeUrl = {
   analyze: (url, prompt) => api.post('/analyze', { url, prompt }),
+  getJob: (jobId) => api.get(`/analyze/${jobId}`),
 };
 
 export const amazon = {

@@ -23,11 +23,26 @@ class GeminiProvider extends AIProviderInterface {
     if (schema) {
       fullPrompt = `${prompt}\n\nRespond with valid JSON only. Use this schema:\n${JSON.stringify(schema, null, 2)}`;
     }
-    const result = await Promise.race([
-      this.model.generateContent(fullPrompt),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('AI timed out')), timeoutMs)),
-    ]);
-    let text = result.response.text().trim();
+    const attempt = async () => {
+      const result = await Promise.race([
+        this.model.generateContent(fullPrompt),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AI timed out')), timeoutMs)),
+      ]);
+      return result.response.text().trim();
+    };
+    let text;
+    let lastErr;
+    const delays = [500, 1500, 3000];
+    for (let i = 0; i <= delays.length; i++) {
+      try {
+        text = await attempt();
+        break;
+      } catch (err) {
+        lastErr = err;
+        if (i < delays.length) await new Promise((r) => setTimeout(r, delays[i]));
+      }
+    }
+    if (text == null) throw lastErr || new Error('AI timed out');
     if (schema) text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     return text;
   }

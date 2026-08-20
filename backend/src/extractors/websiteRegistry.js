@@ -123,6 +123,61 @@ const SELECTORS = {
     image: ['img.zoom img'],
     specs: ['div.spec li'],
   },
+  noon: {
+    title: ['h1.sc-6c86e31-0', 'h1.sc-b14fd4eb-0', 'h1[class*="sc-"]', '[class*="productTitle"]', 'h1'],
+    price: ['div[class*="price"] span[class*="currency"]', 'span[class*="priceAmount"]', '[data-qa="price"]', 'strong[class*="price"]'],
+    originalPrice: ['span[class*="was_price"]', '[class*="oldPrice"]', 'del'],
+    brand: ['a[class*="brand"]', '[class*="brandName"]'],
+    image: ['img[class*="productImage"]', 'img[class*="gallery"]'],
+    ratingValue: ['[class*="rating"] strong', '[class*="ratingValue"]'],
+    ratingCount: ['[class*="ratingCount"]', '[class*="reviews_count"]'],
+    description: ['div[class*="description"]', 'div[class*="productDescription"]'],
+    specsTable: ['div[class*="specification"] tr', 'table tr'],
+  },
+  namshi: {
+    title: ['h1[class*="productName"]', 'h1[class*="title"]', 'div[class*="product-name"] h1'],
+    price: ['span[class*="finalPrice"]', 'div[class*="price-block"] span', 'span[class*="price"]:not([class*="old"])'],
+    originalPrice: ['span[class*="oldPrice"]', 'del'],
+    brand: ['span[class*="brand"]', 'a[class*="brand"]'],
+    image: ['img[class*="productImage"]', 'img[class*="gallery"]'],
+    ratingValue: ['div[class*="rating"] span', 'span[class*="rating"]'],
+    ratingCount: ['span[class*="count"]'],
+    description: ['div[class*="description"]'],
+    specsTable: ['div[class*="specification"] tr', 'table tr'],
+  },
+  carrefour: {
+    title: ['h1[class*="productTitle"]', 'h1[class*="title"]', 'div[class*="product-name"] h1', 'h1'],
+    price: ['span[class*="price"]', 'strong[class*="price"]', '[class*="ProductPrice"]'],
+    originalPrice: ['span[class*="oldPrice"]', 'del', '[class*="was-price"]'],
+    brand: ['a[class*="brand"]', '[class*="brandName"]'],
+    image: ['img[class*="productImage"]', 'img[class*="gallery"]'],
+    ratingValue: ['div[class*="rating"] span', 'span[class*="rating"]'],
+    ratingCount: ['span[class*="count"]'],
+    description: ['div[class*="description"]', 'div[class*="productDescription"]'],
+    specsTable: ['div[class*="specification"] tr', 'table tr'],
+  },
+  sharafDG: {
+    title: ['h1[class*="product-name"]', 'h1[class*="title"]', 'div[class*="product-title"] h1', 'h1'],
+    price: ['span[class*="price"]', 'strong[class*="price"]', '[class*="current-price"]'],
+    originalPrice: ['span[class*="old-price"]', 'del', '[class*="line-through"]'],
+    brand: ['a[class*="brand"]', '[class*="brandName"]'],
+    image: ['img[class*="product-image"]', 'img[class*="gallery"]'],
+    ratingValue: ['div[class*="rating"] span', 'span[class*="rating"]'],
+    ratingCount: ['span[class*="count"]'],
+    description: ['div[class*="description"]'],
+    specsTable: ['div[class*="specification"] tr', 'table tr'],
+  },
+  dubaiStore: {
+    title: ['h1[class*="product-title"]', 'h1[class*="title"]', 'div[class*="product-name"] h1', 'h1'],
+    price: ['span[class*="price"]', 'strong[class*="price"]', '[class*="current-price"]'],
+    originalPrice: ['span[class*="old-price"]', 'del', '[class*="list-price"]'],
+    brand: ['a[class*="brand"]', '[class*="brandName"]'],
+    image: ['img[class*="product-image"]', 'img[class*="gallery"]'],
+    ratingValue: ['div[class*="rating"] span', 'span[class*="rating"]'],
+    ratingCount: ['span[class*="count"]'],
+    description: ['div[class*="description"]'],
+    specsTable: ['div[class*="specification"] tr', 'table tr'],
+  },
 };
 
 const GENERIC = {
@@ -175,6 +230,8 @@ const STORES = [
     domains: ['ajio.com'],
     selectors: { ...GENERIC, ...SELECTORS.ajio },
     isProductPath: (path) => /\/p\/|\/product\//.test(path),
+    structured: true,
+    renderWait: '[class*="product-detail"]',
   },
   {
     id: 'nykaa',
@@ -182,6 +239,7 @@ const STORES = [
     domains: ['nykaa.com'],
     selectors: { ...GENERIC, ...SELECTORS.nykaa },
     isProductPath: (path) => /\/p\//.test(path),
+    structured: true,
   },
   {
     id: 'apple',
@@ -231,10 +289,65 @@ const STORES = [
     domains: ['meesho.com'],
     selectors: { ...GENERIC, ...SELECTORS.meesho },
     isProductPath: (path) => /\/p\//.test(path),
+    renderWait: '[class*="product"]',
+    embedded: ['__NEXT_DATA__', 'Product'],
+  },
+  {
+    id: 'noon',
+    label: 'Noon',
+    domains: ['noon.com', 'noon.uae', 'noon.ae'],
+    selectors: { ...GENERIC, ...SELECTORS.noon },
+    isProductPath: (path) => /\/products\//.test(path) || /\/product\//.test(path),
+    renderWait: '[class*="product"]',
+    embedded: ['__NEXT_DATA__', 'Product'],
+  },
+  {
+    id: 'namshi',
+    label: 'Namshi',
+    domains: ['namshi.com', 'namshi.ae'],
+    selectors: { ...GENERIC, ...SELECTORS.namshi },
+    isProductPath: (path) => /\/\d+\d*\//.test(path) || /\/buy\//.test(path),
+    renderWait: '[class*="product"]',
+    embedded: ['__NEXT_DATA__', 'Product'],
+  },
+  {
+    id: 'carrefour',
+    label: 'Carrefour',
+    domains: ['carrefouruae.com', 'carrefour.com', 'carrefour.ae'],
+    selectors: { ...GENERIC, ...SELECTORS.carrefour },
+    isProductPath: (path) => /\/p\//.test(path) || /\/product\//.test(path),
+    renderWait: '[class*="product"]',
+    embedded: ['__NEXT_DATA__', 'Product'],
+  },
+  {
+    id: 'sharafDG',
+    label: 'Sharaf DG',
+    domains: ['sharafdg.com', 'sharafdgexpress.com'],
+    selectors: { ...GENERIC, ...SELECTORS.sharafDG },
+    isProductPath: (path) => /\/p\//.test(path) || /\/product\//.test(path),
+    renderWait: '[class*="product"]',
+    embedded: ['__NEXT_DATA__', 'Product'],
+  },
+  {
+    id: 'dubaiStore',
+    label: 'DubaiStore',
+    domains: ['dubaistore.com'],
+    selectors: { ...GENERIC, ...SELECTORS.dubaiStore },
+    isProductPath: (path) => /\/p\//.test(path) || /\/product\//.test(path),
+    renderWait: '[class*="product"]',
+    embedded: ['__NEXT_DATA__', 'Product'],
   },
 ];
 
 const PRODUCT_PATH_HINTS = ['product', 'pdp', 'dp/', 'gp/product', 'itm', 'buy', '/p/', '_pid', 'sku'];
+
+// Stores that render product pages via client-side JS and therefore need a
+// headless browser (renderFetcher) instead of a plain HTTP fetch.
+const JS_STORE_IDS = new Set(['flipkart', 'myntra', 'meesho', 'ajio', 'nykaa', 'noon', 'namshi', 'carrefour', 'sharafDG', 'dubaiStore']);
+
+function needsRendering(siteId) {
+  return JS_STORE_IDS.has(siteId);
+}
 
 const GENERIC_PROFILE = {
   id: 'generic',
@@ -288,4 +401,4 @@ function isProductUrl(url) {
   return site.isProductPath(safePath(url));
 }
 
-module.exports = { detectSite, isSupported, isProductUrl, looksLikeProduct, STORES, GENERIC_PROFILE, SELECTORS, GENERIC };
+module.exports = { detectSite, isSupported, isProductUrl, looksLikeProduct, needsRendering, STORES, GENERIC_PROFILE, SELECTORS, GENERIC };

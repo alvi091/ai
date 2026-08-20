@@ -12,6 +12,32 @@
  */
 
 const config = require('../config');
+const { renderPage } = require('./renderFetcher');
+
+/**
+ * Route-aware fetch: JS storefronts need a real browser render, everything else
+ * (notably Amazon) uses the fast plain-HTTP path.
+ */
+async function fetchPageSmart(url, site = null) {
+  const needsRender = site && site.renderWait;
+  if (needsRender && config.crawler.playwrightEnabled !== false) {
+    const rendered = await renderPage(url, { renderWait: site.renderWait });
+    if (rendered.ok && rendered.html.length >= config.crawler.minHtmlBytes) {
+      return {
+        ok: true,
+        url: rendered.url || url,
+        html: rendered.html,
+        status: 200,
+        contentType: 'text/html',
+        rendered: true,
+      };
+    }
+    if (config.crawler.playwrightEnabled !== false) {
+      return { ok: false, error: rendered.error || 'Could not render the product page (blocked or broken).', url, status: 0, html: '', contentType: '', rendered: true };
+    }
+  }
+  return fetchPage(url);
+}
 
 async function httpGet(url, opts = {}) {
   const controller = new AbortController();
@@ -59,6 +85,35 @@ function loadPlaywright() {
   return playwrightModule;
 }
 
+/*
+ * A single reused Chromium instance for all fallback renders (same pattern as
+ * renderFetcher). Launching a browser per request is a memory killer on
+ * small Render instances — the persisted browser is closed only on process
+ * exit, and a broken instance is dropped + relaunched on the next call.
+ */
+let renderBrowser = null;
+let renderBrowserPromise = null;
+let renderBrowserEpoch = 0;
+
+function acquireRenderBrowser() {
+  const pw = loadPlaywright();
+  if (!pw) throw new Error('playwright not installed');
+  if (renderBrowserPromise) return renderBrowserPromise;
+  renderBrowserPromise = (async () => {
+    renderBrowser = await pw.chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
+    });
+    return renderBrowser;
+  })();
+  return renderBrowserPromise;
+}
+
 function looksLikeBlocker(html, status) {
   if (status === 403 || status === 429 || status === 503) return true;
   const lower = String(html || '').toLowerCase().slice(0, 6000);
@@ -73,29 +128,38 @@ function looksLikeBlocker(html, status) {
 }
 
 async function renderWithPlaywright(url, opts = {}) {
-  const pw = loadPlaywright();
-  if (!pw) return { ok: false, html: '', error: 'playwright not installed', rendered: true };
-  let browser;
+  if (!loadPlaywright()) return { ok: false, html: '', error: 'playwright not installed', rendered: true };
   try {
-    browser = await pw.chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
-    });
+    const browser = await acquireRenderBrowser();
     const context = await browser.newContext({
       userAgent: config.crawler.userAgent,
       viewport: { width: 1440, height: 2200 },
       locale: 'en-IN',
-      extraHTTPHeaders: { 'accept-language': 'en-US,en;q=0.9' },
+      extraHTTPHeaders: {
+        accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'accept-language': 'en-IN,en-GB;q=0.9,en;q=0.8,en-US;q=0.7',
+        'sec-ch-ua': '"Chromium";v="125", "Not.A/Brand";v="24"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+      },
     });
     const page = await context.newPage();
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs || 18000 });
     await page.waitForTimeout(1200);
     const html = await page.content();
     const finalUrl = page.url();
-    await browser.close();
+    await context.close().catch(() => {});
     return { ok: Boolean(html && html.length > 200), html: html || '', url: finalUrl, rendered: true };
   } catch (err) {
-    if (browser) { try { await browser.close(); } catch { /* ignore */ } }
+    // A crashed browser must not poison every later render — drop it so the
+    // next call relaunches, then fail this one gracefully.
+    if (renderBrowser) {
+      renderBrowserEpoch += 1;
+      renderBrowserPromise = null;
+      const broken = renderBrowser;
+      renderBrowser = null;
+      broken.close().catch(() => {});
+    }
     return { ok: false, html: '', error: err.message, rendered: true };
   }
 }
@@ -126,4 +190,4 @@ async function fetchPage(url) {
   return first;
 }
 
-module.exports = { fetchPage, httpGet, looksLikeBlocker, renderWithPlaywright };
+module.exports = { fetchPage, httpGet, looksLikeBlocker, renderWithPlaywright, fetchPageSmart };

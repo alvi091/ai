@@ -156,8 +156,8 @@ function extractReviewMetrics(product = {}) {
   const topics = detectTopics(reviews);
 
   const sorted = [...reviews].sort((a, b) => (b.helpful_votes || 0) - (a.helpful_votes || 0));
-  const positiveQuotes = sorted.filter((r) => Number(r.rating) >= 4).slice(0, 3);
-  const negativeQuotes = sorted.filter((r) => Number(r.rating) <= 2).slice(0, 3);
+  const positiveQuotes = sorted.filter((r) => Number(r.rating) >= 4).slice(0, 10);
+  const negativeQuotes = sorted.filter((r) => Number(r.rating) <= 2).slice(0, 10);
 
   const confidence = count >= 200 ? 95 : count >= 100 ? 88 : count >= 50 ? 78 : count >= 20 ? 62 : count >= 5 ? 45 : 25;
 

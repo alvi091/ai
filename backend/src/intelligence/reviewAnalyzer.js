@@ -193,8 +193,8 @@ function analyze(reviews = [], opts = {}) {
     samples: aspectSentiment[c.key].samples,
   }));
 
-  const positiveQuotes = enriched.filter((r) => r.polarity === 'positive').sort((a, b) => b.helpful - a.helpful).slice(0, 3).map((q) => ({ rating: q.rating, text: q.text, author: q.author }));
-  const negativeQuotes = enriched.filter((r) => r.polarity === 'negative').sort((a, b) => b.helpful - a.helpful).slice(0, 3).map((q) => ({ rating: q.rating, text: q.text, author: q.author }));
+  const positiveQuotes = enriched.filter((r) => r.polarity === 'positive').sort((a, b) => b.helpful - a.helpful).slice(0, 10).map((q) => ({ rating: q.rating, text: q.text, author: q.author }));
+  const negativeQuotes = enriched.filter((r) => r.polarity === 'negative').sort((a, b) => b.helpful - a.helpful).slice(0, 10).map((q) => ({ rating: q.rating, text: q.text, author: q.author }));
 
   const fakeScore = enriched.reduce((s, r) => s + fakeScoreFor(r), 0);
   const fakeRate = total ? Math.min(100, Math.round((fakeScore / total) * 40)) : 0;
@@ -253,4 +253,4 @@ function sentiment(text) {
   return 'neutral';
 }
 
-module.exports = { analyze, sentiment, isSpam };
+module.exports = { analyze, sentiment, isSpam, polarityOf, aspectHits };

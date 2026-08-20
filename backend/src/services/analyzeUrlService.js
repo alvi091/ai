@@ -12,7 +12,7 @@
 const { extractProductFromUrl } = require('../extractors');
 const { analyzeProduct } = require('./productAnalytics');
 const { generateReport } = require('./reportBuilder');
-const { getAll } = require('./marketplaceCatalog');
+const prisma = require('../database');
 const { priceIntelligence } = require('../intelligence/priceIntelligence');
 const { explainSpecs } = require('../intelligence/specsIntelligence');
 const reviewAnalyzer = require('../intelligence/reviewAnalyzer');
@@ -124,21 +124,39 @@ function inferCategory(text) {
   return null;
 }
 
-function catalogContext(raw) {
-  const catalog = getAll();
+async function catalogContext(raw) {
   const rawCat = String(raw.category || '').toLowerCase().trim();
   if (!rawCat) return { products: [], matches: false, inferred: null };
 
-  const exact = catalog.filter(
-    (p) => String(p.category || '').toLowerCase().trim() === rawCat
-  );
-  if (exact.length) return { products: exact, matchesRawCategory: true, inferred: null };
+  let rows = [];
+  try {
+    rows = await prisma.product.findMany({
+      where: { category: { equals: rawCat, mode: 'insensitive' } },
+      take: 200,
+      select: {
+        id: true, name: true, brand: true, price: true, rating: true, reviews: true,
+        image: true, category: true, currency: true,
+      },
+    });
+  } catch {
+    rows = [];
+  }
+  if (rows.length) return { products: rows, matchesRawCategory: true, inferred: null };
 
-  const broad = catalog.filter((p) => {
-    const cat = String(p.category || '').toLowerCase();
-    return cat.includes(rawCat) || rawCat.includes(cat);
-  });
-  return { products: broad.slice(0, 200), matchesRawCategory: false, inferred: null };
+  // Broad includes fallback.
+  const broad = [];
+  try {
+    const all = await prisma.product.findMany({
+      take: 500,
+      select: { id: true, name: true, brand: true, price: true, rating: true, reviews: true, image: true, category: true, currency: true },
+    });
+    for (const p of all) {
+      const cat = String(p.category || '').toLowerCase();
+      if (cat.includes(rawCat) || rawCat.includes(cat)) broad.push(p);
+      if (broad.length >= 200) break;
+    }
+  } catch { /* ignore */ }
+  return { products: broad, matchesRawCategory: false, inferred: null };
 }
 
 function slugTokens(path) {
@@ -208,14 +226,19 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
   const reviews = extract.reviews;
   const extraction = extract.extraction || {};
 
-  // Storefronts that gate their pages behind anti-bot walls when hit from our
-  // servers: fail with a clear explanation instead of analyzing the wrong page.
+  // Storefronts that gate their pages behind anti-bot walls even after JS
+  // rendering: fail with a clear explanation instead of analyzing the wrong page.
   const STORE_BLOCK_NOTES = {
-    flipkart: "Flipkart serves product pages as a JavaScript app and blocks automated requests from our servers, so nothing could be read. Flipkart links work best in a normal browser \u2014 or paste an Amazon.in link here and we'll analyze the same product.",
-    meesho: 'Meesho returned an Access Denied (403) \u2014 it blocks automated access from our servers, so this product can\u2019t be read live. Try an Amazon.in link or the sample report instead.',
+    flipkart: "Flipkart still serves anti-bot walls to our servers, so nothing could be read this time. Flipkart links work best in a normal browser \u2014 or paste an Amazon.in link here and we'll analyze the same product.",
+    meesho: 'Meesho returned Access Denied and blocked the live render from our servers, so this product couldn\u2019t be read. Try an Amazon.in link or the sample report instead.',
     myntra: 'Myntra redirected our automated request to an unrelated page, so the product you pasted couldn\u2019t be analyzed. Try the exact product link, an Amazon.in link, or the sample report.',
-    nykaa: 'Nykaa blocks automated requests from our servers, so this product couldn\u2019t be read live. Try an Amazon.in link or the sample report instead.',
-    ajio: 'Ajio blocks automated requests from our servers, so this product couldn\u2019t be read live. Try an Amazon.in link or the sample report instead.',
+    nykaa: 'Nykaa blocked the automated request from our servers, so this product couldn\u2019t be read live. Try an Amazon.in link or the sample report instead.',
+    ajio: 'Ajio blocked the automated request from our servers, so this product couldn\u2019t be read live. Try an Amazon.in link or the sample report instead.',
+    noon: 'Noon blocked the automated render from our servers, so this product couldn\u2019t be read. Try the exact product link or an Amazon link instead.',
+    namshi: 'Namshi blocked the automated render from our servers, so this product couldn\u2019t be read. Try an Amazon link or the sample report instead.',
+    carrefour: 'Carrefour blocked the automated render from our servers, so this product couldn\u2019t be read. Try an Amazon link or the sample report instead.',
+    sharafDG: 'Sharaf DG blocked the automated render from our servers, so this product couldn\u2019t be read. Try an Amazon link or the sample report instead.',
+    dubaiStore: 'DubaiStore blocked the automated render from our servers, so this product couldn\u2019t be read. Try an Amazon link or the sample report instead.',
   };
   if (extract.ok && STORE_BLOCK_NOTES[extraction.site && extraction.site.id]) {
     const hasData = Boolean(product.title) || Number(product.price) > 0 || reviews.length > 0;
@@ -261,7 +284,7 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
   const inferred = inferCategory(raw.title || raw.name || '');
   if (inferred && inferred !== raw.category) raw.category = inferred;
 
-  const ctx = catalogContext(raw);
+  const ctx = await catalogContext(raw);
   const categoryProducts = ctx.products;
 
   const alternatives = categoryProducts
@@ -293,7 +316,14 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
   const priceGen = priceIntelligence(product, { history: [], marketPrices });
 
   const reviewAnalysis = reviewAnalyzer.analyze(reviews, {
-    max: config.crawler.maxReviews,
+    max: (config.crawler.flipkartReviews === 0 && extraction.site && extraction.site.id === 'flipkart')
+      || (config.crawler.myntraReviews === 0 && extraction.site && extraction.site.id === 'myntra')
+      || (config.crawler.amazonReviews === 0 && extraction.site && extraction.site.id === 'amazon')
+      || (config.crawler.ajioReviews === 0 && extraction.site && extraction.site.id === 'ajio')
+      || (config.crawler.nykaaReviews === 0 && extraction.site && extraction.site.id === 'nykaa')
+      || (config.crawler.meeshoReviews === 0 && extraction.site && extraction.site.id === 'meesho')
+      ? 400
+      : config.crawler.maxReviews,
     starOverride: raw.rating_breakdown || undefined,
   });
   const reviewSentiment = deriveSentiment({
@@ -313,6 +343,22 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
   });
 
   const specExplained = explainSpecs(product.specifications || {}, product.specRows || []);
+
+  // Tag every collected review with its polarity + tagged aspects so the UI can
+  // annotate the full feed (single source of truth = the analyzer's word lists).
+  const taggedReviews = (reviews || []).map((r) => ({
+    ...r,
+    polarity: reviewAnalyzer.polarityOf(r),
+    aspects: reviewAnalyzer.aspectHits(String(r.text || '')),
+  }));
+
+  const aspectSentiment = {};
+  for (const [k, m] of Object.entries(reviewAnalysis.aspectSentiment || {})) {
+    aspectSentiment[k] = {
+      ...m,
+      samples: (m.samples || []).slice(0, 2).map((s) => String(s).slice(0, 200)),
+    };
+  }
 
   const enriched = {
     price: {
@@ -339,16 +385,22 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
       positive: reviewAnalysis.positive,
       neutral: reviewAnalysis.neutral,
       negative: reviewAnalysis.negative,
+      present: reviewAnalysis.present,
+      total: reviewAnalysis.total,
       fakeRisk: reviewAnalysis.fakeRisk,
       spamRemoved: reviewAnalysis.spamRemoved,
       duplicatesRemoved: reviewAnalysis.duplicatesRemoved,
       avgRating: reviewAnalysis.avgRating,
       starDistribution: reviewAnalysis.starDistribution,
+      confidence: reviewAnalysis.confidence,
       praiseCount: (reviewAnalysis.praises || []).length,
       complaintsCount: (reviewAnalysis.complaints || []).length,
+      praises: reviewAnalysis.praises || [],
+      complaints: reviewAnalysis.complaints || [],
+      aspectSentiment,
       recurringIssues: reviewAnalysis.recurringIssues || [],
-      positiveQuotes: (reviewAnalysis.positiveQuotes || []).slice(0, 3),
-      negativeQuotes: (reviewAnalysis.negativeQuotes || []).slice(0, 3),
+      positiveQuotes: (reviewAnalysis.positiveQuotes || []).slice(0, 10),
+      negativeQuotes: (reviewAnalysis.negativeQuotes || []).slice(0, 10),
     },
   };
 
@@ -367,7 +419,24 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
       rating_breakdown: raw.rating_breakdown || product.starDistribution || null,
       in_stock: raw.in_stock,
     },
-    reviews: reviews.slice(0, config.crawler.maxReviews),
+    reviews: (config.crawler.flipkartReviews === 0 && (extraction.site && extraction.site.id === 'flipkart'))
+      || (config.crawler.myntraReviews === 0 && (extraction.site && extraction.site.id === 'myntra'))
+      || (config.crawler.amazonReviews === 0 && (extraction.site && extraction.site.id === 'amazon'))
+      || (config.crawler.ajioReviews === 0 && (extraction.site && extraction.site.id === 'ajio'))
+      || (config.crawler.nykaaReviews === 0 && (extraction.site && extraction.site.id === 'nykaa'))
+      || (config.crawler.meeshoReviews === 0 && (extraction.site && extraction.site.id === 'meesho'))
+      ? taggedReviews
+      : taggedReviews.slice(0, config.crawler.maxReviews),
+    alternatives: alternatives.map((a) => ({
+      id: a.id,
+      name: a.name,
+      brand: a.brand || null,
+      price: a.price,
+      rating: a.rating,
+      reviews: a.reviews,
+      image: a.image || null,
+      currency: a.currency || raw.currency || 'INR',
+    })),
     analytics,
     report: {
       ...report,

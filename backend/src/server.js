@@ -30,13 +30,31 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 if (config.nodeEnv === 'production') {
-  app.use(
-    rateLimit({
+  let limiter;
+  try {
+    if (process.env.REDIS_URL) {
+      const { RedisStore } = require('rate-limit-redis');
+      const { Redis } = require('ioredis');
+      const redis = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 1 });
+      limiter = rateLimit({
+        windowMs: config.rateLimit.windowMs,
+        max: config.rateLimit.max,
+        standardHeaders: true,
+        legacyHeaders: false,
+        store: new RedisStore({ sendCommand: (...args) => redis.call(...args) }),
+        message: { error: 'Too many requests, please try again later' },
+      });
+    } else {
+      throw new Error('REDIS_URL missing');
+    }
+  } catch {
+    limiter = rateLimit({
       windowMs: config.rateLimit.windowMs,
       max: config.rateLimit.max,
       message: { error: 'Too many requests, please try again later' },
-    })
-  );
+    });
+  }
+  app.use(limiter);
 }
 
 app.get('/api/health', (req, res) => {

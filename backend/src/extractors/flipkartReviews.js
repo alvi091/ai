@@ -1,0 +1,368 @@
+/*
+ * Flipkart deep review fetcher — pulls the FULL review comment slate from
+ * Flipkart's product-reviews JSON API, which the product page shell does not
+ * server-render (reviews lazy-load client-side in the RN/Atlas webview).
+ *
+ * Main source (verified working):
+ *   GET https://www.flipkart.com/api/3/product/reviews
+ *       ?productId=<PID>&count=30&ratings=ALL&reviewerType=ALL
+ *       &sortOrder=MOST_HELPFUL&start=<offset>
+ *   -> {"RESPONSE":{ "data":[ { "value": { id, author, rating, title, text,
+ *        created, helpfulCount, certifiedBuyer, ... } } ],
+ *        "params":{ "totalCount": N } }}
+ *
+ * The endpoint rate-limits aggressively (403 reCAPTCHA after a burst), so calls
+ * are spaced and summary-497d retried once. When the API is persistently blocked
+ * we fall back to the server-rendered reviews page (`/product-reviews/<slug>`,
+ * embedded 10-per-page in window.__INITIAL_STATE__). If everything is blocked we
+ * return null and the caller keeps whatever was embedded in the product page.
+ */
+
+const config = require('../config');
+
+const PER_PAGE = 30;
+const DEFAULT_SPACING_MS = 3000;
+// Minimum gap between ANY Flipkart HTTP call across the whole process, so
+// sequential product analyses (user pasting several links) never trip the
+// anti-bot limiter — it counts requests from our IP, not pages within one run.
+// Observed: ~4.5s spacing stays clean; 2.5s occasionally trips the wall.
+const GLOBAL_GAP_MS = parseInt(process.env.FLIPKART_SPACING_MS, 10) || 4000;
+const MAX_PAGES = 400;
+
+let lastFlipkartRequestAt = 0;
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/*
+ * Cross-instance pacing for Flipkart. Flipkart rate-limits bursts with 403
+ * ("reCAPTCHA") walls that collapse the review slate to the ~10 fallback copy
+ * — the counter that keeps us under it must be shared across ALL worker
+ * instances (a per-process counter only works on one box). When REDIS_URL is
+ * present the last-request timestamp is also written to Redis so different
+ * instances stand in line instead of firing within the same 4s window. Without
+ * Redis (local dev) the local counter is used.
+ */
+let paceRedis = null;
+function acquirePaceRedis() {
+  if (!process.env.REDIS_URL || paceRedis) return paceRedis;
+  try {
+    const { Redis } = require('ioredis');
+    paceRedis = new Redis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: 1,
+      connectTimeout: 3000,
+      enableOfflineQueue: false,
+    });
+    paceRedis.on('error', () => { /* pacing is best-effort — never break a request */ });
+  } catch {
+    paceRedis = null;
+  }
+  return paceRedis;
+}
+
+const PACE_KEY = 'flipkart:request:last';
+
+async function waitForPace(gapMs) {
+  const redis = acquirePaceRedis();
+  let remoteLast = 0;
+  if (redis) {
+    const cur = await redis.get(PACE_KEY).catch(() => null);
+    remoteLast = parseInt(cur, 10) || 0;
+  }
+  const last = Math.max(lastFlipkartRequestAt, remoteLast);
+  const wait = gapMs - (Date.now() - last);
+  if (wait > 0) await sleep(wait);
+  const stamped = Date.now();
+  lastFlipkartRequestAt = stamped;
+  if (redis) redis.set(PACE_KEY, String(stamped), 'EX', 60).catch(() => {});
+}
+
+/**
+ * Serialize every outbound Flipkart request with a global minimum gap. Two
+ * analyze requests running close together must still be spaced apart — the
+ * 403 ("reCAPTCHA") wall is what reduces review counts to the ~10 fallback.
+ */
+async function paced(fn, gapMs = GLOBAL_GAP_MS) {
+  await waitForPace(gapMs);
+  return fn();
+}
+
+/**
+ * Expose the shared pace-gate so the caller can also space out the Flipkart
+ * product-page fetch (one analyze request) against the reviews API calls of a
+ * second analyze request running right behind it. Without this, pasting two
+ * product links in a row produces a burst that trips the anti-bot wall.
+ */
+function acquireFlipkartSlot(gapMs = GLOBAL_GAP_MS) {
+  return waitForPace(gapMs);
+}
+
+function num(v) {
+  if (v == null) return null;
+  const n = parseFloat(String(v).replace(/[^\d.-]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function extractProductId(url, html = '') {
+  if (url) {
+    try {
+      const pid = new URL(url).searchParams.get('pid');
+      if (pid) return pid;
+    } catch { /* ignore */ }
+  }
+  const fromHtml = String(html || '').match(/[?&]pid=([A-Za-z0-9]{8,})/);
+  if (fromHtml) return fromHtml[1];
+  // Fallback: the page's embedded widget state carries the ATLAS productId
+  // ("MOBHP2QY7GH4XWWS") even when the URL has no pid param.
+  const atlas = String(html || '').match(/"productId"\s*:\s*"([A-Za-z0-9]{8,})"/);
+  return atlas ? atlas[1] : null;
+}
+
+/** Build a plausible reviews-page referer + page URL from the product URL. */
+function reviewsPageUrl(url, pid) {
+  try {
+    const u = new URL(url);
+    const segments = u.pathname.split('/').filter(Boolean);
+    const slug = segments[0] && segments[0] !== 'p' ? segments[0] : null;
+    if (slug) {
+      return `https://www.flipkart.com/${slug}/product-reviews/${slug}?pid=${pid}`;
+    }
+    return `https://www.flipkart.com/p/${pid}/product-reviews/${pid}?pid=${pid}`;
+  } catch { /* ignore */ }
+  return `https://www.flipkart.com/p/${pid}?pid=${pid}`;
+}
+
+function mapReview(value) {
+  if (!value || (!value.text && value.rating == null)) return null;
+  return {
+    author: value.author || null,
+    rating: num(value.rating),
+    title: value.title || null,
+    text: String(value.text || '').slice(0, 4000),
+    date: value.created || null,
+    helpful: num(value.helpfulCount || (value.upvote && value.upvote.value && value.upvote.value.count)) || 0,
+    verified: Boolean(value.certifiedBuyer),
+    source: 'flipkart-api',
+    _id: value.id || null,
+  };
+}
+
+function pushUnique(all, seen, r) {
+  if (!r) return false;
+  const key = r._id || String(r.text || '').slice(0, 120).toLowerCase();
+  if (!key || seen.has(key)) return false;
+  seen.add(key);
+  all.push(r);
+  return true;
+}
+
+function apiGet(productId, start, referer) {
+  return paced(() => new Promise((resolve) => {
+    const params = {
+      productId,
+      count: String(PER_PAGE),
+      ratings: 'ALL',
+      reviewerType: 'ALL',
+      sortOrder: 'MOST_HELPFUL',
+      start: String(start),
+    };
+    const qs = Object.entries(params)
+      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+      .join('&');
+    const req = require('https').request(
+      {
+        hostname: 'www.flipkart.com',
+        port: 443,
+        path: `/api/3/product/reviews?${qs}`,
+        method: 'GET',
+        headers: {
+          Host: 'www.flipkart.com',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 FKUA/website/41/website/Desktop',
+          Accept: 'application/json, text/plain, */*',
+          'Accept-Language': 'en-US,en;q=0.9',
+          Origin: 'https://www.flipkart.com',
+          Referer: referer,
+          'Sec-Fetch-Dest': 'empty',
+          'Sec-Fetch-Mode': 'cors',
+          'Sec-Fetch-Site': 'same-origin',
+        },
+        timeout: 25000,
+      },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (c) => { body += c; if (body.length > 8 * 1024 * 1024) req.destroy(); });
+        res.on('end', () => resolve({ status: res.statusCode, body }));
+        res.on('error', () => resolve({ status: 0, body: '', error: 'response error' }));
+      }
+    );
+    req.on('error', (e) => resolve({ status: 0, body: '', error: e.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: '', error: 'timeout' }); });
+    req.end();
+  }));
+}
+
+/** Server-rendered reviews page → embedded ProductReviewValue objects. */
+function reviewsFromReviewsPageHtml(html) {
+  const out = [];
+  try {
+    const start = html.indexOf('window.__INITIAL_STATE__ = ');
+    if (start === -1) return out;
+    let depth = 0, end = -1;
+    for (let i = start + 'window.__INITIAL_STATE__ = '.length; i < html.length; i++) {
+      const c = html[i];
+      if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+    }
+    if (end === -1) return out;
+    const state = JSON.parse(html.slice(start + 'window.__INITIAL_STATE__ = '.length, end));
+    (function walk(node, depth) {
+      if (!node || typeof node !== 'object' || depth > 14) return;
+      if (node.type === 'ProductReviewValue' && (node.text != null || node.rating != null)) {
+        out.push(mapReview(node));
+        return;
+      }
+      if (Array.isArray(node)) { for (const it of node) walk(it, depth + 1); return; }
+      for (const k of Object.keys(node)) walk(node[k], depth + 1);
+    })(state, 0);
+  } catch { /* ignore */ }
+  return out.filter(Boolean);
+}
+
+/**
+ * Try the full paginated API. Returns the collected reviews plus a `blocked`
+ * flag when the API is persistently unavailable.
+ */
+async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
+  const referer = reviewsPageUrl(url, productId);
+  const all = [];
+  const seen = new Set();
+  let start = 0;
+  let totalCount = null;
+  let emptyPages = 0;
+  let blockedCount = 0;
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    let res = await apiGet(productId, start, referer);
+    if (res.status !== 200) {
+      if (res.status === 400 || res.status === 404 || res.status === 410) {
+        return { reviews: all, blocked: false }; // bad productId — stop
+      }
+      // 403/429/timeout — retry with exponential backoff. A "flag" usually
+      // lasts ~15-60s, so a few escalation steps often ride it out without
+      // falling to the small embedded copy.
+      blockedCount += 1;
+      const backoffMs = Math.min(4000 * Math.pow(2, blockedCount - 1), 24000);
+      if (onSpacing) onSpacing(`Flipkart is rate-limiting the reviews API — backing off ${Math.round(backoffMs / 1000)}s and retrying…`);
+      await sleep(backoffMs);
+      const retried = await apiGet(productId, start, referer);
+      if (retried.status === 200) {
+        res = retried;
+        blockedCount = Math.max(0, blockedCount - 1);
+        if (onSpacing) onSpacing('Flipkart reviews API recovered.');
+      } else if (blockedCount >= 4) {
+        return { reviews: all, blocked: true };
+      } else {
+        continue; // keep trying the same offset next iteration (no data skipped)
+      }
+    } else {
+      blockedCount = 0;
+    }
+
+    let json = null;
+    try { json = JSON.parse(res.body); } catch { return { reviews: all, blocked: false }; }
+    const resp = json && json.RESPONSE;
+    if (!resp || !Array.isArray(resp.data)) return { reviews: all, blocked: false };
+    totalCount = num(resp.params && resp.params.totalCount) || num(resp.totalCount);
+
+    let added = 0;
+    for (const item of resp.data) {
+      if (pushUnique(all, seen, mapReview(item && item.value))) added += 1;
+    }
+    if (added === 0) {
+      emptyPages += 1;
+      if (emptyPages >= 3) break;
+    } else {
+      emptyPages = 0;
+    }
+
+    if (max > 0 && all.length >= max) { if (all.length > max) all.length = max; break; }
+    if (totalCount != null && all.length >= totalCount) break;
+    if (resp.data.length < PER_PAGE) break;
+
+    start += PER_PAGE;
+    if (spacingMs > 0) await sleep(spacingMs);
+  }
+  return { reviews: all, blocked: false };
+}
+
+async function fetchViaHtml(productId, url, max) {
+  const pageUrl = reviewsPageUrl(url, productId);
+  const html = await httpGetBody(pageUrl);
+  if (!html) return null;
+  let revs = reviewsFromReviewsPageHtml(html);
+  if (max > 0 && revs.length > max) revs = revs.slice(0, max);
+  return revs.length ? revs : null;
+}
+
+function httpGetBody(url) {
+  return paced(() => new Promise((resolve) => {
+    const u = new URL(url);
+    const req = require('https').request(
+      {
+        hostname: u.hostname,
+        port: 443,
+        path: u.pathname + u.search,
+        method: 'GET',
+        headers: {
+          Host: u.hostname,
+          'User-Agent': config.crawler.userAgent,
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        timeout: 25000,
+      },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (c) => { body += c; if (body.length > 12 * 1024 * 1024) req.destroy(); });
+        res.on('end', () => {
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            const loc = res.headers.location.startsWith('http') ? res.headers.location : new URL(res.headers.location, url).toString();
+            return httpGetBody(loc).then(resolve);
+          }
+          resolve(body);
+        });
+        res.on('error', () => resolve(''));
+      }
+    );
+    req.on('error', () => resolve(''));
+    req.on('timeout', () => { req.destroy(); resolve(''); });
+    req.end();
+  }));
+}
+
+/**
+ * Fetch review comments for a Flipkart product. `max` = 0 → fetch all.
+ * Returns an array of canonical reviews, or null if every source is blocked.
+ */
+async function fetchFlipkartReviews({ productId, url = '', max = 0, spacingMs = DEFAULT_SPACING_MS, onSpacing } = {}) {
+  if (!productId) return null;
+
+  const viaApi = await fetchViaApi({ productId, url, max, spacingMs, onSpacing });
+  if (viaApi.reviews && viaApi.reviews.length) {
+    return viaApi.reviews;
+  }
+  if (viaApi.blocked) {
+    // IP is rate-limited; try the server-rendered page (still 10 embedded).
+    if (onSpacing) onSpacing('Flipkart reviews API blocked — falling back to the page copy…');
+    const htmlFallback = await fetchViaHtml(productId, url, max);
+    if (htmlFallback && htmlFallback.length) return htmlFallback;
+    return null;
+  }
+  return null;
+}
+
+module.exports = { fetchFlipkartReviews, extractProductId, fetchViaHtml, reviewsPageUrl, reviewsFromReviewsPageHtml, acquireFlipkartSlot, DEFAULT_SPACING_MS };

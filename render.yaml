@@ -1,33 +1,136 @@
-# Render Blueprint — auto-provisions the backend web service.
-# Docs: https://render.com/docs/blueprint-spec
-# This file MUST live at the root of the repository (it does now).
-# The backend source itself is in the /backend subfolder (rootDir below).
+# Render Blueprint — Ayymus deployment.
+#
+# Provisions three things off the same repository:
+#   1. WEB     — Express API + the built frontend SPA (enqueues URL analyses)
+#   2. WORKER  — drains the URL-analysis queue (crawl + Playwright + Gemini)
+#   3. REDIS   — BullMQ queue + shared rate-limit store
+#
+# HOW TO DEPLOY
+#   1. Push this repo to GitHub.
+#   2. Render -> New -> Blueprint Instance -> pick the repo (it auto-reads render.yaml).
+#   3. Fill the `sync: false` secrets in the dashboard Environment tab after the
+#      first deploy: DATABASE_URL (Supabase), GEMINI_API_KEY, RAPIDAPI_KEY,
+#      CORS_ORIGIN, SMTP_USER, SMTP_PASS.
+#   4. Postgres is Supabase (external). Run once against it:
+#        npx prisma db push && npm run prisma:seed
+#      (Migrations aren't used yet - schema.prisma is db-push managed.)
+#   5. Load test, read "cache-hit / fresh" log lines, scale WORKER instances from
+#      the dashboard slider when needed. No code changes required to scale.
+#
+# Instance plans below use `standard` as a safe baseline. Bump RAM/CPU per
+# store via the dashboard (WEB 1-2 GB; WORKER 2-4 GB) after first deploy.
+# Free tier CANNOT do this reliably (browser + 24/7 load) - use paid plans.
+
+databases:
+  - name: redis
+    databaseType: redis
+    plan: starter
+
 services:
+  # ---------- API + frontend ----------
   - type: web
-    name: ai-buying-agent-api
+    name: ayymus-api
     runtime: node
     rootDir: backend
-    plan: free
-    buildCommand: npm install && npx prisma generate
-    # db push syncs the Prisma schema to Supabase on boot (free tier has no preDeployCommand).
-    # It is safe/idempotent; it will refuse destructive changes rather than drop data.
-    startCommand: npx prisma db push --skip-generate && npm start
+    plan: standard
+    buildCommand: >-
+      npm ci &&
+      npx prisma generate &&
+      cd ../frontend && npm ci && npm run build
+    # Schema is db-push managed. Run ONCE after first deploy against Supabase:
+    #   npx prisma db push && npm run prisma:seed
+    # (keeping it here would slow every boot and crash-loop while the DB is down)
+    startCommand: node src/server.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
         value: "20"
-      # Set in Render dashboard -> Environment (after service is created):
-      #   DATABASE_URL  -> your Supabase Postgres connection string
-      #   JWT_SECRET    -> a long random string (or keep the generated one)
-      #   GEMINI_API_KEY-> your Google AI Studio key
-      #   CORS_ORIGIN   -> your web app URL (only needed for the web frontend)
+      # Secrets - set in the dashboard once (NOT in the repo):
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: GEMINI_API_KEY
         sync: false
+      - key: RAPIDAPI_HOST
+        value: real-time-amazon-data.p.rapidapi.com
+      - key: RAPIDAPI_KEY
+        sync: false
       - key: CORS_ORIGIN
         sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: REDIS_URL
+        fromDatabase:
+          name: redis
+          property: connectionString
+      - key: ANALYZE_QUEUE_ENABLED
+        value: "true"
+      - key: ANALYZE_INLINE_MAX
+        value: "2"
+      - key: ANALYSIS_CACHE_TTL_MS
+        value: "43200000"
+
+  # ---------- Background worker ----------
+  - type: worker
+    name: ayymus-worker
+    runtime: node
+    rootDir: backend
+    plan: standard
+    buildCommand: >-
+      npm ci &&
+      npx prisma generate &&
+      npx playwright install --with-deps chromium
+    startCommand: npm run start:worker
+    disk:
+      name: playwright-cache
+      mountPath: /opt/playwright-cache
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20"
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/playwright-cache
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=2048
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: RAPIDAPI_HOST
+        value: real-time-amazon-data.p.rapidapi.com
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: REDIS_URL
+        fromDatabase:
+          name: redis
+          property: connectionString
+      # Concurrency per worker instance (crawl + browsers are memory heavy).
+      - key: ANALYZE_WORKER_CONCURRENCY
+        value: "3"
+      # Best-effort cap on ACTIVE analyses across ALL worker instances.
+      - key: ANALYZE_GLOBAL_MAX
+        value: "16"
+      - key: ANALYSIS_CACHE_TTL_MS
+        value: "43200000"
+      # Deep review slates - 0 = fetch ALL written comments.
+      - key: FLIPKART_MAX_REVIEWS
+        value: "0"
+      - key: MYNTRA_MAX_REVIEWS
+        value: "0"
+      - key: AMAZON_MAX_REVIEWS
+        value: "0"
+      - key: AJIO_MAX_REVIEWS
+        value: "0"
+      - key: NYKAA_MAX_REVIEWS
+        value: "0"
+      - key: MEESHO_MAX_REVIEWS
+        value: "0"

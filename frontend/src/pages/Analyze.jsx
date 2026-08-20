@@ -81,9 +81,19 @@ export default function Analyze() {
 
     try {
       const res = await analyzeUrl.analyze(target.replace(/\/\s*$/, ''));
+      const payload = res.data;
+
+      // Queued mode (production worker fleet): poll the job to completion.
+      if (payload?.queued && payload?.jobId) {
+        clearTimers();
+        setSimSteps([]);
+        setConfirmedSteps([`Queued — analysis ${payload.jobId}`]);
+        await pollJob(payload.jobId);
+        return;
+      }
+
       clearTimers();
       setSimSteps([]);
-      const payload = res.data;
       const steps = payload?.progress || [];
       setConfirmedSteps(steps);
       if (!payload || payload.ok === false) {
@@ -103,9 +113,45 @@ export default function Analyze() {
           ? 'Took too long — the page may be slow or blocked. Try again.'
           : 'Could not reach the analyzer. Please try again.');
       setError(msg);
+      setErrorKind(err?.response?.data?.kind || null);
       setPhase('error');
     }
   }, [url, startSim, clearTimers]);
+
+  const pollJob = useCallback(async (jobId) => {
+    const started = Date.now();
+    const maxWait = 300000;
+    while (Date.now() - started < maxWait) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const j = await analyzeUrl.getJob(jobId).catch(() => null);
+      if (!j || !j.data || j.data.status === 'queued') continue;
+      const job = j.data;
+      if (Array.isArray(job.progress) && job.progress.length) {
+        setConfirmedSteps(job.progress);
+      }
+      if (job.status === 'done' && job.result) {
+        const r = job.result;
+        if (r && r.ok) {
+          setConfirmedSteps(r.progress || job.progress || []);
+          setData(r);
+          setPhase('done');
+        } else {
+          setErrorKind(r?.kind || null);
+          setError(r?.error || 'Could not analyze that link.');
+          setPhase('error');
+        }
+        return;
+      }
+      if (job.status === 'failed') {
+        setErrorKind('analysis_failed');
+        setError(job.error || 'Analysis failed. Please try again.');
+        setPhase('error');
+        return;
+      }
+    }
+    setError('The analysis is taking unusually long. Please try again.');
+    setPhase('error');
+  }, []);
 
   // Auto-run when the page is opened with ?url=... (e.g. from the hero search).
   useEffect(() => {
@@ -204,7 +250,7 @@ export default function Analyze() {
               <h3 className="mt-5 font-display text-lg font-semibold text-white">Crawling & reasoning through the data</h3>
               <p className="mt-2 text-sm text-surface-500">This usually takes a few seconds; blocked pages pause here.</p>
               <ol className="mx-auto mt-6 max-w-md space-y-2 text-left">
-                {simSteps.map((s, i) => (
+                {(confirmedSteps.length ? confirmedSteps : simSteps).map((s, i) => (
                   <motion.li
                     key={`${i}-${s}`}
                     initial={{ opacity: 0, x: -6 }}
@@ -555,9 +601,29 @@ function SpecsPanel({ specs }) {
   );
 }
 
+const ASPECT_LABELS = {
+  battery: 'Battery', camera: 'Camera', display: 'Display & screen', comfort: 'Comfort & fit',
+  durability: 'Durability', performance: 'Performance', value: 'Value for money',
+  build: 'Build quality', sound: 'Sound & audio', software: 'Software & connectivity',
+  heating: 'Thermals', size: 'Size & weight', shipping: 'Delivery & packaging',
+  support: 'Support & warranty', waterproof: 'Water resistance',
+};
+
+function aspectLabel(key) {
+  return ASPECT_LABELS[key] || key;
+}
+
+function confidenceLabel(v) {
+  if (v == null) return { label: 'Not enough data', cls: 'text-ink-500 border-line bg-surface-100' };
+  if (v >= 70) return { label: 'High confidence', cls: 'text-success border-success/25 bg-success/[0.06]' };
+  if (v >= 40) return { label: 'Medium confidence', cls: 'text-warning border-warning/25 bg-warning/[0.06]' };
+  return { label: 'Low confidence', cls: 'text-danger border-danger/25 bg-danger/[0.06]' };
+}
+
 function ReviewPanel({ review }) {
   if (!review) return null;
   const hasData = review.avgRating != null || review.positive != null;
+  const conf = confidenceLabel(review.confidence);
   return (
     <SectionCard icon={Star} title="Review health" subtitle="Beyond the headliner stars">
       {hasData && (
@@ -567,16 +633,26 @@ function ReviewPanel({ review }) {
           <MiniStat label="Avg /5" value={review.avgRating != null ? review.avgRating.toFixed(1) : '—'} tone="text-ink-100" />
         </div>
       )}
-      {review.fakeRisk != null && (
-        <p className="mb-4 flex items-center gap-2 text-[12px] text-ink-400">
-          <ShieldCheck className="h-3.5 w-3.5 text-warning" />
-          Fake-review risk {Math.round(review.fakeRisk)}%
-          {review.spamRemoved > 0 && ` · ${review.spamRemoved} flagged as spam`}
-          {review.duplicatesRemoved > 0 && ` · ${review.duplicatesRemoved} duplicates removed`}
-        </p>
-      )}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px] text-ink-400">
+        {review.present && (
+          <span className={`rounded-full border px-2.5 py-0.5 font-medium ${conf.cls}`}>{conf.label}</span>
+        )}
+        {review.total > 0 && (
+          <span className="rounded-full border border-line bg-surface-100 px-2.5 py-0.5 text-ink-400">
+            {review.total} reviews read
+          </span>
+        )}
+        {review.fakeRisk != null && (
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5 text-warning" />
+            Fake-review risk {Math.round(review.fakeRisk)}%
+          </span>
+        )}
+        {review.spamRemoved > 0 && <span>{review.spamRemoved} flagged as spam</span>}
+        {review.duplicatesRemoved > 0 && <span>{review.duplicatesRemoved} duplicates removed</span>}
+      </div>
       {review.starDistribution && (
-        <div className="mb-4 space-y-1.5">
+        <div className="mb-5 space-y-1.5">
           {[5, 4, 3, 2, 1].map((s) => {
             const pct = review.starDistribution[`p${s}`];
             if (pct == null) return null;
@@ -597,11 +673,149 @@ function ReviewPanel({ review }) {
           })}
         </div>
       )}
+      <AspectBreakdown review={review} />
+      <RecurringIssues issues={review.recurringIssues || []} />
       {(review.positiveQuotes?.length || review.negativeQuotes?.length) && (
-        <div className="grid gap-2.5">
+        <div className="mt-5 grid gap-2.5">
           {review.positiveQuotes?.length > 0 && <QuoteList title="Happy buyers say" quotes={review.positiveQuotes} tone="success" />}
           {review.negativeQuotes?.length > 0 && <QuoteList title="Watch out" quotes={review.negativeQuotes} tone="danger" />}
         </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function AspectBreakdown({ review }) {
+  const praises = (review.praises || []);
+  const complaints = (review.complaints || []);
+  const hasPraises = praises.length > 0 || (review.aspectSentiment && Object.values(review.aspectSentiment).some((m) => m.positivePct >= 55));
+  const hasComplaints = complaints.length > 0 || (review.aspectSentiment && Object.values(review.aspectSentiment).some((m) => m.negativePct >= 50));
+  if (!hasPraises && !hasComplaints) return null;
+  return (
+    <div className="mb-5 space-y-4">
+      {hasPraises && (
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">What reviewers praise</p>
+          <div className="space-y-1.5">
+            {praises.map((p) => (
+              <AspectRow key={`pr-${p.key}`} label={p.topic} pct={p.weight} count={review.aspectSentiment?.[p.key]?.count} tone="bg-success" />
+            ))}
+          </div>
+        </div>
+      )}
+      {hasComplaints && (
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">What reviewers complain about</p>
+          <div className="space-y-1.5">
+            {complaints.map((c) => (
+              <AspectRow key={`cmp-${c.key}`} label={c.topic} pct={c.weight} count={review.aspectSentiment?.[c.key]?.count} tone="bg-danger" />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AspectRow({ label, pct, count, tone }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="w-32 shrink-0 truncate text-[11px] font-medium text-ink-300" title={label}>{label}</span>
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-line">
+        <motion.div
+          className={`h-full rounded-full ${tone}`}
+          initial={{ width: 0 }}
+          animate={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+          transition={{ duration: 0.7, delay: 0.2 }}
+        />
+      </div>
+      <span className="w-16 shrink-0 text-right font-mono text-[11px] text-ink-400">{pct}%{count != null ? ` · ${count}` : ''}</span>
+    </div>
+  );
+}
+
+function RecurringIssues({ issues }) {
+  if (!issues || issues.length === 0) return null;
+  return (
+    <div className="mb-5">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">Recurring issues</p>
+      <ul className="space-y-2">
+        {issues.slice(0, 4).map((iss) => (
+          <li key={iss.aspect} className="rounded-xl border border-danger/20 bg-danger/[0.04] px-3.5 py-2.5">
+            <p className="flex items-baseline justify-between gap-2 text-[12px] font-semibold text-ink-200">
+              {iss.title}
+              <span className="shrink-0 font-mono text-[11px] text-danger">{iss.percent}% of mentions</span>
+            </p>
+            {iss.samples?.length > 0 && (
+              <ul className="mt-1.5 space-y-1">
+                {iss.samples.map((s, i) => (
+                  <li key={i} className="text-[11px] leading-relaxed text-ink-400">“{String(s).slice(0, 160)}”</li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ReviewFeed({ reviews }) {
+  const [showAll, setShowAll] = useState(false);
+  const list = reviews || [];
+  if (!list.length) return null;
+  const shown = showAll ? list : list.slice(0, 12);
+  const counts = list.reduce((acc, r) => {
+    acc[r.polarity || 'neutral'] = (acc[r.polarity || 'neutral'] || 0) + 1;
+    return acc;
+  }, {});
+  return (
+    <SectionCard icon={Users} title={`All reviews (${list.length})`} subtitle="The full comment slate we crawled — each tagged with its detected sentiment">
+      <div className="mb-3 flex flex-wrap gap-3 text-[11px] text-ink-400">
+        <span className="text-success">Positive {counts.positive || 0}</span>
+        <span className="text-ink-400">Neutral {counts.neutral || 0}</span>
+        <span className="text-danger">Negative {counts.negative || 0}</span>
+      </div>
+      <ul className="space-y-2.5">
+        {shown.map((r, i) => (
+          <li key={r._id || i} className="rounded-xl border border-line bg-surface-60 px-3.5 py-3">
+            <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-400">
+              <span className="font-medium text-ink-200">{[1, 2, 3, 4, 5].map((s) => (s <= (r.rating || 0) ? '★' : '☆')).join('')}</span>
+              <span>{r.author || 'buyer'}</span>
+              {r.date && <span>{String(r.date).slice(0, 10)}</span>}
+              {r.verified && <span className="text-success">verified</span>}
+              {Number(r.helpful) > 0 && <span>{r.helpful} helpful</span>}
+            </div>
+            <p className="text-[12px] leading-relaxed text-ink-300">{r.text}</p>
+            {(r.polarity || r.aspects?.length > 0) && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                    r.polarity === 'positive' ? 'border-success/25 bg-success/[0.06] text-success'
+                    : r.polarity === 'negative' ? 'border-danger/25 bg-danger/[0.06] text-danger'
+                    : 'border-line bg-surface-100 text-ink-400'
+                  }`}
+                >
+                  {r.polarity === 'positive' ? '✓ Positive' : r.polarity === 'negative' ? '✗ Negative' : 'Neutral'}
+                </span>
+                {(r.aspects || []).slice(0, 4).map((a) => (
+                  <span key={a} className="rounded-full border border-line bg-surface-100 px-2 py-0.5 text-[10px] text-ink-400">
+                    {aspectLabel(a)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      {list.length > shown.length && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-3 text-[12px] font-medium text-primary-300 hover:underline"
+        >
+          {showAll ? 'Show fewer' : `Show all ${list.length} reviews`}
+        </button>
       )}
     </SectionCard>
   );
@@ -613,13 +827,30 @@ function QuoteList({ title, quotes, tone }) {
       <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">{title}</p>
       <ul className="space-y-2">
         {quotes.map((q, i) => (
-          <li key={i} className={`rounded-xl border px-3.5 py-2.5 text-[12px] leading-relaxed ${tone === 'success' ? 'border-success/20 bg-success/[0.05] text-ink-300' : 'border-danger/20 bg-danger/[0.05] text-ink-300'}`}>
-            “{String(q.comment || q.text || '').slice(0, 160)}”
-            <span className="mt-1 block text-[11px] text-ink-500">— {q.author || 'buyer'}, {q.rating}/5</span>
-          </li>
+          <ExpandableQuote key={i} q={q} tone={tone} />
         ))}
       </ul>
     </div>
+  );
+}
+
+function ExpandableQuote({ q, tone }) {
+  const [open, setOpen] = useState(false);
+  const text = String(q.comment || q.text || '');
+  const preview = text.length > 160 ? `${text.slice(0, 160)}…` : text;
+  const toneCls = tone === 'success' ? 'border-success/20 bg-success/[0.05]' : 'border-danger/20 bg-danger/[0.05]';
+  return (
+    <li className={`rounded-xl border px-3.5 py-2.5 text-[12px] leading-relaxed ${toneCls}`}>
+      <p className="text-ink-300">{open ? text : preview}</p>
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[11px] text-ink-500">— {q.author || 'buyer'}, {q.rating}/5</span>
+        {text.length > 160 && (
+          <button type="button" onClick={() => setOpen((v) => !v)} className="text-[11px] font-medium text-primary-300 hover:underline">
+            {open ? 'Show less' : 'Show full review'}
+          </button>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -660,6 +891,8 @@ function ResultView({ data, onReset }) {
         <SpecsPanel specs={info.specExplained} />
         <ReviewPanel review={info.reviewAnalysis} />
       </div>
+
+      <ReviewFeed reviews={data.reviews} />
 
       <motion.div variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-line bg-surface-60 px-6 py-4 sm:flex-row">
         <p className="text-[12px] text-ink-500">
