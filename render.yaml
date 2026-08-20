@@ -38,9 +38,9 @@ services:
     rootDir: backend
     plan: standard
     buildCommand: >-
-      npm ci &&
+      npm ci --include=dev &&
       npx prisma generate &&
-      cd ../frontend && npm ci && npm run build
+      cd ../frontend && npm ci --include=dev && npm run build
     # Schema is db-push managed. Run ONCE after first deploy against Supabase:
     #   npx prisma db push && npm run prisma:seed
     # (keeping it here would slow every boot and crash-loop while the DB is down)
@@ -89,7 +89,7 @@ services:
     rootDir: backend
     plan: standard
     buildCommand: >-
-      npm ci &&
+      npm ci --include=dev &&
       npx prisma generate &&
       npx playwright install --with-deps chromium
     startCommand: npm run start:worker
