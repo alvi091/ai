@@ -1,16 +1,17 @@
 # Render Blueprint — Ayymus deployment.
 #
-# Provisions three things off the same repository:
-#   1. WEB     — Express API + the built frontend SPA (enqueues URL analyses)
-#   2. WORKER  — drains the URL-analysis queue (crawl + Playwright + Gemini)
-#   3. REDIS   — BullMQ queue + shared rate-limit store
+# Provisions four things off the same repository:
+#   1. WEB      — Express API + the built frontend SPA (enqueues URL analyses)
+#   2. WORKER   — drains the URL-analysis queue (crawl + Playwright + Gemini)
+#   3. REDIS    — Key Value instance (BullMQ queue + shared rate-limit store)
+#   4. Postgres — external (Supabase). Not created here.
 #
 # HOW TO DEPLOY
 #   1. Push this repo to GitHub.
 #   2. Render -> New -> Blueprint Instance -> pick the repo (it auto-reads render.yaml).
-#   3. Fill the `sync: false` secrets in the dashboard Environment tab after the
-#      first deploy: DATABASE_URL (Supabase), GEMINI_API_KEY, RAPIDAPI_KEY,
-#      CORS_ORIGIN, SMTP_USER, SMTP_PASS.
+#   3. Fill the `sync: false` secrets in the dashboard during creation:
+#      DATABASE_URL (Supabase), GEMINI_API_KEY, RAPIDAPI_KEY, CORS_ORIGIN,
+#      SMTP_HOST, SMTP_USER, SMTP_PASS.
 #   4. Postgres is Supabase (external). Run once against it:
 #        npx prisma db push && npm run prisma:seed
 #      (Migrations aren't used yet - schema.prisma is db-push managed.)
@@ -21,12 +22,15 @@
 # store via the dashboard (WEB 1-2 GB; WORKER 2-4 GB) after first deploy.
 # Free tier CANNOT do this reliably (browser + 24/7 load) - use paid plans.
 
-databases:
-  - name: redis
-    databaseType: redis
-    plan: starter
-
 services:
+  # ---------- Redis (Render Key Value) ----------
+  - type: keyvalue
+    name: redis
+    plan: starter
+    ipAllowList: [] # Internal connections only (api + worker connect privately)
+    maxmemoryPolicy: noeviction # Never silently drop queued jobs
+    persistenceMode: journal-snapshot
+
   # ---------- API + frontend ----------
   - type: web
     name: ayymus-api
@@ -67,7 +71,8 @@ services:
       - key: SMTP_PASS
         sync: false
       - key: REDIS_URL
-        fromDatabase:
+        fromService:
+          type: keyvalue
           name: redis
           property: connectionString
       - key: ANALYZE_QUEUE_ENABLED
@@ -110,7 +115,8 @@ services:
       - key: RAPIDAPI_KEY
         sync: false
       - key: REDIS_URL
-        fromDatabase:
+        fromService:
+          type: keyvalue
           name: redis
           property: connectionString
       # Concurrency per worker instance (crawl + browsers are memory heavy).
