@@ -222,6 +222,7 @@ const STORES = [
     domains: ['myntra.com'],
     selectors: { ...GENERIC, ...SELECTORS.myntra },
     isProductPath: (path) => /\/buy\/?$/.test(path) || /\/buy\//.test(path),
+    renderWait: '[class*="pdp"]',
     structured: true,
   },
   {
