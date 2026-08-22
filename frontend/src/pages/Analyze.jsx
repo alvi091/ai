@@ -88,7 +88,7 @@ export default function Analyze() {
         clearTimers();
         setSimSteps([]);
         setConfirmedSteps([`Queued — analysis ${payload.jobId}`]);
-        await pollJob(payload.jobId);
+        await pollJob(payload.jobId, setConfirmedSteps);
         return;
       }
 
@@ -118,21 +118,36 @@ export default function Analyze() {
     }
   }, [url, startSim, clearTimers]);
 
-  const pollJob = useCallback(async (jobId) => {
+  const pollJob = useCallback(async (jobId, setSteps) => {
     const started = Date.now();
     const maxWait = 300000;
+    let lastStatus = null;
     while (Date.now() - started < maxWait) {
       await new Promise((r) => setTimeout(r, 1500));
       const j = await analyzeUrl.getJob(jobId).catch(() => null);
-      if (!j || !j.data || j.data.status === 'queued') continue;
+      if (!j || !j.data) continue;
       const job = j.data;
+      if (job.status !== lastStatus) {
+        lastStatus = job.status;
+        if (job.status === 'retrying' || (job.error && job.status !== 'done' && job.status !== 'failed')) {
+          const msg = job.error && job.error.length < 120
+            ? job.error
+            : `Re-queued — analysis ${jobId} will resume shortly`;
+          if (setSteps) setSteps((p) => {
+            const filtered = (p || []).filter((s) => !s.startsWith('Re-queued') && !s.startsWith('All ') && !s.includes('slots are busy'));
+            return [...filtered, msg];
+          });
+        }
+      }
+      if (job.status === 'queued') continue;
       if (Array.isArray(job.progress) && job.progress.length) {
-        setConfirmedSteps(job.progress);
+        if (setSteps) setSteps(job.progress); else setConfirmedSteps(job.progress);
       }
       if (job.status === 'done' && job.result) {
         const r = job.result;
         if (r && r.ok) {
-          setConfirmedSteps(r.progress || job.progress || []);
+          const steps = r.progress || job.progress || [];
+          if (setSteps) setSteps(steps); else setConfirmedSteps(steps);
           setData(r);
           setPhase('done');
         } else {

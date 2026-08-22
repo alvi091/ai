@@ -26,7 +26,8 @@ const DEFAULT_SPACING_MS = 3000;
 // sequential product analyses (user pasting several links) never trip the
 // anti-bot limiter — it counts requests from our IP, not pages within one run.
 // Observed: ~4.5s spacing stays clean; 2.5s occasionally trips the wall.
-const GLOBAL_GAP_MS = parseInt(process.env.FLIPKART_SPACING_MS, 10) || 5000;
+// Tuned to 3.5s (safe) in production; override via env if needed.
+const GLOBAL_GAP_MS = parseInt(process.env.FLIPKART_SPACING_MS, 10) || 3500;
 const MAX_PAGES = 400;
 
 let lastFlipkartRequestAt = 0;
@@ -134,17 +135,20 @@ function reviewsPageUrl(url, pid) {
 }
 
 function mapReview(value) {
-  if (!value || (!value.text && value.rating == null)) return null;
+  if (!value) return null;
+  const hasText = Boolean(value.text && String(value.text).trim().length > 0);
+  const hasRating = value.rating != null && !Number.isNaN(num(value.rating));
+  if (!hasText && !hasRating) return null;
   return {
     author: value.author || null,
     rating: num(value.rating),
     title: value.title || null,
     text: String(value.text || '').slice(0, 4000),
-    date: value.created || null,
+    date: value.created || value.date || null,
     helpful: num(value.helpfulCount || (value.upvote && value.upvote.value && value.upvote.value.count)) || 0,
-    verified: Boolean(value.certifiedBuyer),
+    verified: Boolean(value.certifiedBuyer || value.verified),
     source: 'flipkart-api',
-    _id: value.id || null,
+    _id: value.id || value.reviewId || null,
   };
 }
 
@@ -207,28 +211,105 @@ function apiGet(productId, start, referer) {
 /** Server-rendered reviews page → embedded ProductReviewValue objects. */
 function reviewsFromReviewsPageHtml(html) {
   const out = [];
+  if (!html || typeof html !== 'string') return out;
+  const tryPush = (raw) => {
+    const r = mapReview(raw);
+    if (r) {
+      r.source = 'flipkart-page';
+      out.push(r);
+    }
+  };
+  // Strategy 1: the classic window.__INITIAL_STATE__ walk
   try {
     const start = html.indexOf('window.__INITIAL_STATE__ = ');
-    if (start === -1) return out;
-    let depth = 0, end = -1;
-    for (let i = start + 'window.__INITIAL_STATE__ = '.length; i < html.length; i++) {
-      const c = html[i];
-      if (c === '{') depth++;
-      else if (c === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
-    }
-    if (end === -1) return out;
-    const state = JSON.parse(html.slice(start + 'window.__INITIAL_STATE__ = '.length, end));
-    (function walk(node, depth) {
-      if (!node || typeof node !== 'object' || depth > 14) return;
-      if (node.type === 'ProductReviewValue' && (node.text != null || node.rating != null)) {
-        out.push(mapReview(node));
-        return;
+    if (start !== -1) {
+      let depth = 0, end = -1;
+      for (let i = start + 'window.__INITIAL_STATE__ = '.length; i < html.length; i++) {
+        const c = html[i];
+        if (c === '{') depth++;
+        else if (c === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
       }
-      if (Array.isArray(node)) { for (const it of node) walk(it, depth + 1); return; }
-      for (const k of Object.keys(node)) walk(node[k], depth + 1);
-    })(state, 0);
+      if (end !== -1) {
+        const state = JSON.parse(html.slice(start + 'window.__INITIAL_STATE__ = '.length, end));
+        (function walk(node, d) {
+          if (!node || typeof node !== 'object' || d > 16) return;
+          if (Array.isArray(node)) { for (const it of node) walk(it, d + 1); return; }
+          const t = node.type || node.__typename;
+          const looksLikeReview =
+            (t && String(t).toLowerCase().includes('review') && ((node.text != null) || (node.rating != null))) ||
+            (node.id && (node.rating != null || (node.text && String(node.text).length > 20)));
+          if (looksLikeReview) { tryPush(node); return; }
+          for (const k of Object.keys(node)) walk(node[k], d + 1);
+        })(state, 0);
+      }
+    }
   } catch { /* ignore */ }
+  // Strategy 2: __NEXT_DATA__ / other Next embeds
+  if (out.length < 5) {
+    const patterns = [
+      /<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i,
+      /window\.__NEXT_DATA__\s*=\s*(\{[\s\S]*?\});?\s*<\/script>/i,
+      /<script[^>]*type="application\/json"[^>]*>([\s\S]*?)<\/script>/gi,
+    ];
+    for (const re of patterns) {
+      let m;
+      while ((m = re.exec(html)) !== null) {
+        try {
+          const data = JSON.parse(m[1]);
+          (function walk(node, d) {
+            if (!node || typeof node !== 'object' || d > 16) return;
+            if (Array.isArray(node)) { for (const it of node) walk(it, d + 1); return; }
+            if ((node.text != null || node.rating != null) && (node.author != null || node.title != null || node.id != null)) {
+              tryPush(node); return;
+            }
+            for (const k of Object.keys(node)) walk(node[k], d + 1);
+          })(data, 0);
+        } catch { /* ignore */ }
+        if (out.length >= 10) break;
+      }
+      if (out.length >= 10) break;
+    }
+  }
   return out.filter(Boolean);
+}
+
+/**
+ * Try multiple response shapes that Flipkart has served over time:
+ *   v1 (classic):  json.RESPONSE.data[] -> each item has { value: {...review} }
+ *   v2 (flatter):  json.RESPONSE.data[] -> items ARE the review (no .value)
+ *   v3 (new key):  json.data[] directly
+ *   v4 (nested):   json.RESPONSE.value.data or json.result.items etc.
+ * Returns { items[], total } where items are already flattened review objects.
+ */
+function extractReviewArray(json) {
+  let arr = null;
+  let total = null;
+  if (!json || typeof json !== 'object') return { items: [], total: null };
+
+  const tryTotalFrom = (node) => {
+    if (!node || typeof node !== 'object') return;
+    const params = node.params || node.paging || node.meta || {};
+    const t = num(params.totalCount) ?? num(params.total) ?? num(node.totalCount) ?? num(node.total);
+    if (t != null && total == null) total = t;
+  };
+
+  const candidates = [
+    () => { const r = json.RESPONSE; tryTotalFrom(r); return r && Array.isArray(r.data) ? r.data : null; },
+    () => { tryTotalFrom(json); return Array.isArray(json.data) ? json.data : null; },
+    () => { const r = json.reviews || json.reviewList || json.result; tryTotalFrom(r); return Array.isArray(r) ? r : null; },
+    () => { const r = json.RESPONSE; if (r && r.value && Array.isArray(r.value.data)) { tryTotalFrom(r.value); return r.value.data; } return null; },
+    () => { const r = json.data; if (r && Array.isArray(r.reviews)) { tryTotalFrom(r); return r.reviews; } return null; },
+  ];
+
+  for (const fn of candidates) {
+    try {
+      const v = fn();
+      if (v && v.length) { arr = v; break; }
+    } catch { /* ignore */ }
+  }
+
+  if (arr && !arr.length) arr = null;
+  return { items: arr || [], total };
 }
 
 /**
@@ -248,12 +329,14 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
     let res = await apiGet(productId, start, referer);
     if (res.status !== 200) {
       if (res.status === 400 || res.status === 404 || res.status === 410) {
-        return { reviews: all, blocked: false }; // bad productId — stop
+        return { reviews: all, blocked: false };
       }
-      // 403/429/timeout — retry with exponential backoff. A "flag" usually
-      // lasts ~15-60s, so increased escalation steps before falling back to embedded.
+      // 403/429/timeout — retry briefly then fall back. A block is usually
+      // 15-60s and holding a worker for 2+ minutes kills throughput, so we
+      // only retry a couple of times with small backoffs before bailing to
+      // the HTML page copy.
       blockedCount += 1;
-      const backoffMs = Math.min(5000 * Math.pow(2, blockedCount - 1), 30000);
+      const backoffMs = Math.min(2000 * Math.pow(2, blockedCount - 1), 8000);
       if (onSpacing) onSpacing(`Flipkart is rate-limiting the reviews API — backing off ${Math.round(backoffMs / 1000)}s and retrying…`);
       await sleep(backoffMs);
       const retried = await apiGet(productId, start, referer);
@@ -261,10 +344,10 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
         res = retried;
         blockedCount = Math.max(0, blockedCount - 1);
         if (onSpacing) onSpacing('Flipkart reviews API recovered.');
-      } else if (blockedCount >= 6) {
+      } else if (blockedCount >= 3) {
         return { reviews: all, blocked: true };
       } else {
-        continue; // keep trying the same offset next iteration (no data skipped)
+        continue;
       }
     } else {
       blockedCount = 0;
@@ -272,24 +355,25 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
 
     let json = null;
     try { json = JSON.parse(res.body); } catch { return { reviews: all, blocked: false }; }
-    const resp = json && json.RESPONSE;
-    if (!resp || !Array.isArray(resp.data)) return { reviews: all, blocked: false };
-    totalCount = num(resp.params && resp.params.totalCount) || num(resp.totalCount);
+    const { items, total } = extractReviewArray(json);
+    if (total != null) totalCount = total;
 
     let added = 0;
-    for (const item of resp.data) {
-      if (pushUnique(all, seen, mapReview(item && item.value))) added += 1;
+    for (const it of items) {
+      // Accept either the old { value: reviewObj } or a direct review object.
+      const reviewRaw = (it && typeof it.value === 'object' && it.value != null) ? it.value : it;
+      if (pushUnique(all, seen, mapReview(reviewRaw))) added += 1;
     }
     if (added === 0) {
       emptyPages += 1;
-      if (emptyPages >= 3) break;
+      if (emptyPages >= 2) break;
     } else {
       emptyPages = 0;
     }
 
     if (max > 0 && all.length >= max) { if (all.length > max) all.length = max; break; }
     if (totalCount != null && all.length >= totalCount) break;
-    if (resp.data.length < PER_PAGE) break;
+    if (items.length < PER_PAGE) break;
 
     start += PER_PAGE;
     if (spacingMs > 0) await sleep(spacingMs);
@@ -299,9 +383,37 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
 
 async function fetchViaHtml(productId, url, max) {
   const pageUrl = reviewsPageUrl(url, productId);
+  // 1) Plain HTTP (paced, cheap).
   const html = await httpGetBody(pageUrl);
-  if (!html) return null;
-  let revs = reviewsFromReviewsPageHtml(html);
+  let revs = html ? reviewsFromReviewsPageHtml(html) : [];
+  if (revs.length < 10) {
+    // 2) If plain HTTP yielded less than a full SSR page (bot wall), try a
+    //    Playwright render. The product-reviews page normally embeds ~10
+    //    top reviews in window.__INITIAL_STATE__ even when the JSON API is
+    //    blocked, but only for real browser clients.
+    try {
+      if (config.crawler.playwrightEnabled !== false) {
+        const { renderPage } = require('./renderFetcher');
+        await waitForPace(GLOBAL_GAP_MS);
+        const rendered = await renderPage(pageUrl, {
+          renderWait: 'div[class*="review"], ul[class*="review"], div._1AtVbE',
+          retries: 1,
+          retryDelayMs: 4000,
+        });
+        if (rendered && rendered.ok && rendered.html) {
+          const r2 = reviewsFromReviewsPageHtml(rendered.html);
+          // Merge, preferring rendered results.
+          const seen = new Set();
+          const merged = [];
+          for (const r of [...r2, ...revs]) {
+            const k = r._id || String(r.text || '').slice(0, 120).toLowerCase();
+            if (k && !seen.has(k)) { seen.add(k); merged.push(r); }
+          }
+          revs = merged;
+        }
+      }
+    } catch { /* render unavailable — keep the plain-http copy */ }
+  }
   if (max > 0 && revs.length > max) revs = revs.slice(0, max);
   return revs.length ? revs : null;
 }
@@ -354,9 +466,11 @@ async function fetchFlipkartReviews({ productId, url = '', max = 0, spacingMs = 
   if (viaApi.reviews && viaApi.reviews.length) {
     return viaApi.reviews;
   }
-  if (viaApi.blocked) {
-    // IP is rate-limited; try the server-rendered page (still 10 embedded).
-    if (onSpacing) onSpacing('Flipkart reviews API blocked — falling back to the page copy…');
+  // Either explicitly blocked, or the API returned 200 but nothing parseable
+  // (response shape may have changed). In both cases try the page copy rather
+  // than giving the user just the 2-3 baseReviews from the product shell.
+  if (viaApi.blocked || !viaApi.reviews || viaApi.reviews.length === 0) {
+    if (onSpacing) onSpacing('Flipkart reviews API empty — falling back to the page copy…');
     const htmlFallback = await fetchViaHtml(productId, url, max);
     if (htmlFallback && htmlFallback.length) return htmlFallback;
     return null;

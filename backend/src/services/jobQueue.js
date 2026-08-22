@@ -30,10 +30,16 @@ function sleep(ms) {
  * Distributed analyze gate — a shared Redis active-counter that caps how many
  * heavy crawl+render analyses run at once across ALL worker instances.
  * BullMQ's per-instance `concurrency` bounds memory on one box; this bounds the
- * fleet. The counter is best-effort (a crashed process skips one DECR, which a
- * 2-min TTL heals), and a saturated gate backs off briefly rather than failing.
+ * fleet.
+ *
+ * IMPORTANT: When the gate is saturated we FAIL FAST (throw) instead of sleeping
+ * here for seconds. Sleeping inside the worker callback holds a BullMQ
+ * concurrency slot doing nothing — a 3-worker fleet with 30s gate-wait per job
+ * effectively drops throughput to zero. Instead we throw and let BullMQ re-queue
+ * the job with its exponential job-level backoff, so other jobs in the queue can
+ * proceed while this one waits on the scheduler.
  */
-const GLOBAL_MAX = parseInt(process.env.ANALYZE_GLOBAL_MAX, 10) || 16;
+const GLOBAL_MAX = parseInt(process.env.ANALYZE_GLOBAL_MAX, 10) || 8;
 const GATE_TTL_S = 120;
 let gateRedis = null;
 
@@ -53,8 +59,16 @@ function acquireGateRedis() {
   return gateRedis;
 }
 
+class GateSaturatedError extends Error {
+  constructor(message) {
+    super(message || 'Analysis gate saturated — retrying later.');
+    this.name = 'GateSaturatedError';
+  }
+}
+
 async function withGlobalGate(fn) {
   const redis = acquireGateRedis();
+  // Without Redis or with a disabled cap, just run.
   if (!redis || GLOBAL_MAX <= 0) return fn();
   const key = 'ayymus:analyze:active';
   let acquired = false;
@@ -66,21 +80,21 @@ async function withGlobalGate(fn) {
       await redis.decr(key).catch(() => {});
       return false;
     };
-    acquired = await tryAcquire();
-    if (!acquired) {
-      // Saturated — wait a bit and retry a few times (backpressure).
-      for (let i = 0; i < 5 && !acquired; i++) {
-        await sleep(2000 * (i + 1));
-        acquired = await tryAcquire();
-      }
+    // Very short in-process retries (total ~2s) then throw back to BullMQ to schedule.
+    for (let i = 0; i < 3 && !acquired; i++) {
+      acquired = await tryAcquire();
+      if (!acquired && i < 2) await sleep(400 * (i + 1));
     }
+    if (!acquired) throw new GateSaturatedError(`All ${GLOBAL_MAX} analysis slots are busy — job will retry shortly.`);
     try {
       return await fn();
     } finally {
       if (acquired) await redis.decr(key).catch(() => {});
     }
-  } catch {
+  } catch (err) {
     if (acquired) await redis.decr(key).catch(() => {});
+    if (err instanceof GateSaturatedError) throw err;
+    // Redis connectivity issue: best-effort bypass (don't fail analysis entirely).
     return fn();
   }
 }
@@ -137,7 +151,15 @@ async function writeCache(normalizedUrl, result) {
 }
 
 async function createJob({ url, normalizedUrl, prompt = null }) {
-  const job = await queue.add('analyze', { url, normalizedUrl, prompt });
+  const job = await queue.add('analyze', { url, normalizedUrl, prompt }, {
+    attempts: 5,
+    backoff: {
+      type: 'exponential',
+      delay: 3000,
+    },
+    removeOnComplete: 500,
+    removeOnFail: 1000,
+  });
   await prisma.analysisJob.create({
     data: { id: String(job.id), url, normalizedUrl, status: 'queued' },
   });
@@ -151,20 +173,55 @@ function attachWorker(processJob) {
       await prisma.analysisJob.update({ where: { id }, data: { progress: steps, status: 'running' } }).catch(() => {});
       job.updateProgress(steps).catch(() => {});
     };
-    await prisma.analysisJob.update({ where: { id }, data: { status: 'running' } }).catch(() => {});
+    // Only mark running the first time (or if retried from 'queued'); a
+    // GateSaturatedError already wrote retrying so don't clobber that label.
+    const prior = await prisma.analysisJob.findUnique({ where: { id } }).catch(() => null);
+    if (!prior || prior.status !== 'retrying') {
+      await prisma.analysisJob.update({ where: { id }, data: { status: 'running' } }).catch(() => {});
+    }
     try {
       const result = await processJob(job.data, onProgress);
       await writeCache(job.data.normalizedUrl, result);
       await prisma.analysisJob.update({ where: { id }, data: { result, status: 'done' } }).catch(() => {});
       return result;
     } catch (err) {
-      await prisma.analysisJob.update({ where: { id }, data: { status: 'failed', error: (err && err.message) || 'Analysis failed' } }).catch(() => {});
+      const isRetriable =
+        err && err.name === 'GateSaturatedError' ||
+        (job.attemptsMade != null && (job.opts.attempts || 1) > job.attemptsMade + 1);
+      if (isRetriable) {
+        await prisma.analysisJob.update({
+          where: { id },
+          data: {
+            status: 'retrying',
+            error: (err && err.message) || 'Analysis will retry shortly.',
+          },
+        }).catch(() => {});
+      } else {
+        await prisma.analysisJob.update({
+          where: { id },
+          data: {
+            status: 'failed',
+            error: (err && err.message) || 'Analysis failed',
+          },
+        }).catch(() => {});
+      }
       throw err;
     }
-  }, { connection, concurrency: QUEUE_CONCURRENCY });
+  }, {
+    connection,
+    concurrency: QUEUE_CONCURRENCY,
+    settings: {
+      stalledInterval: 30000,
+      maxStalledCount: 2,
+    },
+  });
 
   worker.on('failed', (job, err) => {
-    console.error(`[worker] job ${job && job.id} failed:`, err && err.message);
+    console.error(`[worker] job ${job && job.id} failed (final):`, err && err.message);
+  });
+
+  worker.on('retrying', (job) => {
+    console.log(`[worker] job ${job && job.id} retrying (attempt ${(job && job.attemptsMade) || '?'})`);
   });
 
   return worker;
