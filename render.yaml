@@ -140,10 +140,13 @@ services:
       - key: ANALYSIS_CACHE_TTL_MS
         value: "43200000"
       # Deep review slates - 0 = fetch ALL written comments.
+      # Capped for speed — 0 = fetch ALL (can take 30+ min on Flipkart due to 5s pacing).
+      # Set to positive number (e.g. 60) to limit reviews fetched.
       - key: FLIPKART_MAX_REVIEWS
-        value: "0"
+        value: "60"
+      # Capped for speed — 0 = fetch ALL (Myntra API pagination).
       - key: MYNTRA_MAX_REVIEWS
-        value: "0"
+        value: "60"
       - key: AMAZON_MAX_REVIEWS
         value: "0"
       - key: AJIO_MAX_REVIEWS
