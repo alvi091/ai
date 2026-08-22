@@ -123,7 +123,12 @@ function looksLikeBlocker(html, status) {
     lower.includes('verify you are human') ||
     lower.includes('unusual traffic') ||
     lower.includes('enable cookies') ||
-    lower.includes('sorry, we just need to make sure')
+    lower.includes('sorry, we just need to make sure') ||
+    lower.includes('myntra') ||
+    lower.includes('redirected') ||
+    lower.includes('automated') ||
+    lower.includes('bot') ||
+    lower.includes('server-side')
   );
 }
 

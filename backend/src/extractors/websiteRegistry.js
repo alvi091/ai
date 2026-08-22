@@ -211,7 +211,7 @@ const STORES = [
   {
     id: 'flipkart',
     label: 'Flipkart',
-    domains: ['flipkart.com'],
+    domains: ['flipkart.com', 'dl.flipkart.com'],
     selectors: { ...GENERIC, ...SELECTORS.flipkart },
     isProductPath: (path) => /\/p\/itm|_pid_|pr\/|-p\./i.test(path),
     structured: true,

@@ -26,7 +26,7 @@ const DEFAULT_SPACING_MS = 3000;
 // sequential product analyses (user pasting several links) never trip the
 // anti-bot limiter — it counts requests from our IP, not pages within one run.
 // Observed: ~4.5s spacing stays clean; 2.5s occasionally trips the wall.
-const GLOBAL_GAP_MS = parseInt(process.env.FLIPKART_SPACING_MS, 10) || 4000;
+const GLOBAL_GAP_MS = parseInt(process.env.FLIPKART_SPACING_MS, 10) || 5000;
 const MAX_PAGES = 400;
 
 let lastFlipkartRequestAt = 0;
@@ -251,10 +251,9 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
         return { reviews: all, blocked: false }; // bad productId — stop
       }
       // 403/429/timeout — retry with exponential backoff. A "flag" usually
-      // lasts ~15-60s, so a few escalation steps often ride it out without
-      // falling to the small embedded copy.
+      // lasts ~15-60s, so increased escalation steps before falling back to embedded.
       blockedCount += 1;
-      const backoffMs = Math.min(4000 * Math.pow(2, blockedCount - 1), 24000);
+      const backoffMs = Math.min(5000 * Math.pow(2, blockedCount - 1), 30000);
       if (onSpacing) onSpacing(`Flipkart is rate-limiting the reviews API — backing off ${Math.round(backoffMs / 1000)}s and retrying…`);
       await sleep(backoffMs);
       const retried = await apiGet(productId, start, referer);
@@ -262,7 +261,7 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
         res = retried;
         blockedCount = Math.max(0, blockedCount - 1);
         if (onSpacing) onSpacing('Flipkart reviews API recovered.');
-      } else if (blockedCount >= 4) {
+      } else if (blockedCount >= 6) {
         return { reviews: all, blocked: true };
       } else {
         continue; // keep trying the same offset next iteration (no data skipped)
