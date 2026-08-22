@@ -35,14 +35,18 @@ module.exports = {
     maxReviews: parseInt(process.env.CRAWL_MAX_REVIEWS, 10) || 60,
     // Flipkart deep fetch: how many review comments to pull via the reviews API.
     // 0 = fetch ALL available; positive = cap. Only used for flipkart products.
-    flipkartReviews: process.env.FLIPKART_MAX_REVIEWS === '0'
-      ? 0
-      : parseInt(process.env.FLIPKART_MAX_REVIEWS, 10) || 0,
+    flipkartReviews: process.env.FLIPKART_MAX_REVIEWS
+      ? process.env.FLIPKART_MAX_REVIEWS === '0'
+        ? 0
+        : parseInt(process.env.FLIPKART_MAX_REVIEWS, 10)
+      : 60,
     // Myntra deep fetch: same convention — 0 = fetch ALL written comments,
     // positive = cap. Only used for myntra products.
-    myntraReviews: process.env.MYNTRA_MAX_REVIEWS === '0'
-      ? 0
-      : parseInt(process.env.MYNTRA_MAX_REVIEWS, 10) || 0,
+    myntraReviews: process.env.MYNTRA_MAX_REVIEWS
+      ? process.env.MYNTRA_MAX_REVIEWS === '0'
+        ? 0
+        : parseInt(process.env.MYNTRA_MAX_REVIEWS, 10)
+      : 60,
     // Amazon.in deep fetch: 0 = fetch ALL server-rendered + reachable review
     // pages; positive = cap. Only used for amazon products.
     amazonReviews: process.env.AMAZON_MAX_REVIEWS === '0'
