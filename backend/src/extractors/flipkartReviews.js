@@ -188,7 +188,7 @@ function apiGet(productId, start, referer) {
           'Sec-Fetch-Mode': 'cors',
           'Sec-Fetch-Site': 'same-origin',
         },
-        timeout: 8000,
+        timeout: 3000,
       },
       (res) => {
         let body = '';
@@ -321,7 +321,7 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
   let emptyPages = 0;
   let blockedCount = 0;
   const reviewFetchStart = Date.now();
-  const REVIEW_FETCH_TIMEOUT_MS = 8000;
+  const REVIEW_FETCH_TIMEOUT_MS = 4000;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     if (Date.now() - reviewFetchStart > REVIEW_FETCH_TIMEOUT_MS) break;
@@ -354,10 +354,13 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
     }
 
     let json = null;
-    try { json = JSON.parse(res.body); } catch { console.log(`[flipkart-reviews] page=${page} status=${res.status} body_prefix=${(res.body || '').slice(0, 200)}`); return { reviews: all, blocked: false }; }
+    try { json = JSON.parse(res.body); } catch { return { reviews: all, blocked: false }; }
     const { items, total } = extractReviewArray(json);
     if (total != null) totalCount = total;
-    console.log(`[flipkart-reviews] page=${page} status=${res.status} items=${items.length} total=${total} collected=${all.length} body_keys=${Object.keys(json || {}).join(',')}`);
+
+    if (items.length === 0 && page === 0) {
+      console.log(`[flipkart-reviews] page=0 returned 0 items, body_keys=${Object.keys(json || {}).join(',')} body_prefix=${(res.body || '').slice(0, 300)}`);
+    }
 
     let added = 0;
     for (const it of items) {
@@ -367,7 +370,7 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
     }
     if (added === 0) {
       emptyPages += 1;
-      if (emptyPages >= 2) break;
+      if (emptyPages >= 1) break;
     } else {
       emptyPages = 0;
     }
@@ -431,7 +434,7 @@ function httpGetBody(url) {
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
         },
-        timeout: 8000,
+        timeout: 3000,
       },
       (res) => {
         let body = '';
