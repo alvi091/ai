@@ -35,7 +35,7 @@ async function fetchPageSmart(url, site = null) {
     // Playwright failed — fall through to plain HTTP instead of giving up.
     console.log(`[fetcher] Playwright failed for ${site.id || url}, trying plain HTTP`);
   }
-  return fetchPage(url);
+  return fetchPage(url, site);
 }
 
 async function httpGet(url, opts = {}) {
@@ -49,13 +49,10 @@ async function httpGet(url, opts = {}) {
       headers: {
         'user-agent': config.crawler.userAgent,
         accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'accept-language': 'en-US,en;q=0.9',
+        'accept-language': 'en-IN,en;q=0.9',
       },
     });
     const contentType = String(res.headers.get('content-type') || '');
-    if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml') && !res.url.includes('/p/')) {
-      // still allow download of html-ish content
-    }
     let html;
     try {
       html = await Promise.race([
@@ -99,6 +96,15 @@ function looksLikeBlocker(html, status) {
   );
 }
 
+function isMyntraGeoBlock(html, url) {
+  if (!/myntra\.com/i.test(url || '')) return false;
+  const hasMyx = /window\.__myx\s*=/.test(String(html || ''));
+  const lower = String(html || '').toLowerCase();
+  const hasPdp = lower.includes('pdp-name') || lower.includes('pdp-title') || lower.includes('styleid');
+  const hasPrice = lower.includes('pdp-price') || lower.includes('pdp-final-price');
+  return !hasMyx && !hasPdp && !hasPrice;
+}
+
 async function renderWithPlaywright(url, opts = {}) {
   if (!loadPlaywright()) return { ok: false, html: '', error: 'playwright not installed', rendered: true };
   try {
@@ -133,11 +139,21 @@ async function renderWithPlaywright(url, opts = {}) {
   }
 }
 
-async function fetchPage(url) {
+async function fetchPage(url, site) {
   let first = await httpGet(url);
+
+  if (!first.ok) {
+    return first;
+  }
+
+  if (isMyntraGeoBlock(first.html, first.url || url)) {
+    console.log(`[fetcher] Myntra geo-block detected (no product signals), skipping Playwright`);
+    return { ok: false, error: 'Myntra blocked this request from our server location.', url, html: first.html, status: first.status, contentType: first.contentType, rendered: false, blocked: true };
+  }
+
   const renderable =
     config.crawler.playwrightEnabled &&
-    (!first.ok || looksLikeBlocker(first.html, first.status) || first.html.length < config.crawler.minHtmlBytes);
+    (looksLikeBlocker(first.html, first.status) || first.html.length < config.crawler.minHtmlBytes);
 
   if (renderable) {
     const rendered = await renderWithPlaywright(url);
@@ -153,10 +169,7 @@ async function fetchPage(url) {
     }
   }
 
-  if (!first.ok) {
-    return { ok: false, error: first.error || 'Failed to fetch the page', url, html: '', status: first.status, contentType: '', rendered: false };
-  }
   return first;
 }
 
-module.exports = { fetchPage, httpGet, looksLikeBlocker, renderWithPlaywright, fetchPageSmart };
+module.exports = { fetchPage, httpGet, looksLikeBlocker, isMyntraGeoBlock, renderWithPlaywright, fetchPageSmart };
