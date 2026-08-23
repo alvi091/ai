@@ -126,6 +126,10 @@ async function renderWithPlaywright(url, opts = {}) {
     await context.close().catch(() => {});
     return { ok: Boolean(html && html.length > 200), html: html || '', url: finalUrl, rendered: true };
   } catch (err) {
+    if (err && (err.message || '').match(/browser|target|crashed|detached|closed/i)) {
+      const { resetBrowser } = require('./renderFetcher');
+      if (resetBrowser) resetBrowser();
+    }
     return { ok: false, html: '', error: err.message, rendered: true };
   }
 }

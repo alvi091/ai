@@ -59,9 +59,16 @@ function acquireBrowser() {
         '--disable-gpu',
       ],
     });
+    browser.on('disconnected', () => { browserPromise = null; });
     return browser;
   })();
   return browserPromise;
+}
+
+function resetBrowser() {
+  const old = browserPromise;
+  browserPromise = null;
+  if (old) old.then((b) => b.close().catch(() => {})).catch(() => {});
 }
 
 /**
@@ -107,11 +114,12 @@ async function renderOnce(url, { timeoutMs, renderWait, siteId, attempt = 0 }) {
   let context;
   try {
     browser = await acquireBrowser();
+    const isMyntra = /myntra/i.test(siteId || url || '');
     const needsIndia = /myntra|flipkart|ajio|nykaa|meesho/i.test(siteId || url || '');
     const locale = needsIndia ? 'en-IN' : 'en-IN';
     const timezoneId = needsIndia ? 'Asia/Kolkata' : 'Asia/Dubai';
     const perStoreHeaders = { ...BROWSER_HEADERS };
-    if (/myntra/i.test(siteId || url || '')) {
+    if (isMyntra) {
       perStoreHeaders['Accept-Language'] = 'en-IN,en-GB;q=0.9,en;q=0.8';
       perStoreHeaders['sec-ch-ua'] = '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"';
       perStoreHeaders['sec-ch-ua-full-version-list'] = '"Google Chrome";v="125.0.6422.141", "Chromium";v="125.0.6422.141", "Not.A/Brand";v="24.0.0.0"';
@@ -135,14 +143,16 @@ async function renderOnce(url, { timeoutMs, renderWait, siteId, attempt = 0 }) {
       javaScriptEnabled: true,
       extraHTTPHeaders: perStoreHeaders,
     });
-    try {
-      await context.addCookies([
-        { name: 'd', domain: '.myntra.com', path: '/', value: 'v_1_1_1_vt' },
-        { name: 'lru_c', domain: '.myntra.com', path: '/', value: '1' },
-        { name: 'UserPref', domain: '.myntra.com', path: '/', value: 't=IN&l=en' },
-        { name: 'country', domain: '.myntra.com', path: '/', value: 'in' },
-      ].filter((c) => /myntra/i.test(siteId || url || '') || /\.myntra\.com$/.test(c.domain)));
-    } catch { /* ignore cookie errors */ }
+    if (isMyntra) {
+      try {
+        await context.addCookies([
+          { name: 'd', domain: '.myntra.com', path: '/', value: 'v_1_1_1_vt' },
+          { name: 'lru_c', domain: '.myntra.com', path: '/', value: '1' },
+          { name: 'UserPref', domain: '.myntra.com', path: '/', value: 't=IN&l=en' },
+          { name: 'country', domain: '.myntra.com', path: '/', value: 'in' },
+        ]);
+      } catch { /* ignore cookie errors */ }
+    }
     const page = await context.newPage();
     await page.route('**/*', async (route) => {
       const reqUrl = route.request().url();
@@ -168,10 +178,14 @@ async function renderOnce(url, { timeoutMs, renderWait, siteId, attempt = 0 }) {
     const finalUrl = page.url();
     return { ok: Boolean(html && html.length > 200), html: html || '', url: finalUrl, rendered: true };
   } catch (err) {
+    // If the browser crashed or became unreachable, reset so the next call relaunches.
+    if (err && (err.message || '').match(/browser|target|crashed|detached|closed/i)) {
+      resetBrowser();
+    }
     return { ok: false, html: '', error: err.message, rendered: true };
   } finally {
     if (context) { try { await context.close(); } catch { /* ignore */ } }
   }
 }
 
-module.exports = { renderPage, acquireBrowser };
+module.exports = { renderPage, acquireBrowser, resetBrowser };

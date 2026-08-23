@@ -12,18 +12,30 @@ const { attachWorker, withGlobalGate } = require('./services/jobQueue');
 const { analyzeUrl } = require('./services/analyzeUrlService');
 const prisma = require('./database');
 
+const JOB_TIMEOUT_MS = parseInt(process.env.ANALYZE_JOB_TIMEOUT_MS, 10) || 180000;
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`Analysis timed out after ${Math.round(ms / 1000)}s`)), ms)),
+  ]);
+}
+
 async function main() {
   await prisma.$connect();
   console.log('[worker] DB connected');
 
   const processJob = async (data) => {
     return withGlobalGate(() =>
-      analyzeUrl({
-        url: data.url,
-        prompt: data.prompt || null,
-        user: null,
-        intent: data.intent || {},
-      })
+      withTimeout(
+        analyzeUrl({
+          url: data.url,
+          prompt: data.prompt || null,
+          user: null,
+          intent: data.intent || {},
+        }),
+        JOB_TIMEOUT_MS,
+      )
     );
   };
 
