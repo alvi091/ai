@@ -24,7 +24,7 @@ const PER_PAGE = 30;
 const DEFAULT_SPACING_MS = parseInt(process.env.FLIPKART_SPACING_MS, 10) || 1000;
 // Minimum gap between Flipkart review API calls across the whole process.
 const GLOBAL_GAP_MS = DEFAULT_SPACING_MS;
-const MAX_PAGES = 1;
+const MAX_PAGES = 2;
 
 let lastFlipkartRequestAt = 0;
 
@@ -357,6 +357,7 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
     try { json = JSON.parse(res.body); } catch { return { reviews: all, blocked: false }; }
     const { items, total } = extractReviewArray(json);
     if (total != null) totalCount = total;
+    console.log(`[flipkart-reviews] page=${page} status=${res.status} items=${items.length} total=${total} collected=${all.length}`);
 
     let added = 0;
     for (const it of items) {
@@ -459,15 +460,15 @@ async function fetchFlipkartReviews({ productId, url = '', max = 0, spacingMs = 
   if (!productId) return null;
 
   const viaApi = await fetchViaApi({ productId, url, max, spacingMs, onSpacing });
+  console.log(`[flipkart-reviews] api result: ${viaApi.reviews.length} reviews, blocked=${viaApi.blocked}`);
   if (viaApi.reviews && viaApi.reviews.length) {
     return viaApi.reviews;
   }
   // Either explicitly blocked, or the API returned 200 but nothing parseable
-  // (response shape may have changed). In both cases try the page copy rather
-  // than giving the user just the 2-3 baseReviews from the product shell.
   if (viaApi.blocked || !viaApi.reviews || viaApi.reviews.length === 0) {
     if (onSpacing) onSpacing('Flipkart reviews API empty — falling back to the page copy…');
     const htmlFallback = await fetchViaHtml(productId, url, max);
+    console.log(`[flipkart-reviews] html fallback result: ${htmlFallback ? htmlFallback.length : 0} reviews`);
     if (htmlFallback && htmlFallback.length) return htmlFallback;
     return null;
   }
