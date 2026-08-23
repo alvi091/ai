@@ -24,7 +24,7 @@ const PER_PAGE = 30;
 const DEFAULT_SPACING_MS = parseInt(process.env.FLIPKART_SPACING_MS, 10) || 1000;
 // Minimum gap between Flipkart review API calls across the whole process.
 const GLOBAL_GAP_MS = DEFAULT_SPACING_MS;
-const MAX_PAGES = 3;
+const MAX_PAGES = 1;
 
 let lastFlipkartRequestAt = 0;
 
@@ -158,7 +158,7 @@ function pushUnique(all, seen, r) {
 }
 
 function apiGet(productId, start, referer) {
-  return paced(() => new Promise((resolve) => {
+  return new Promise((resolve) => {
     const params = {
       productId,
       count: String(PER_PAGE),
@@ -201,7 +201,7 @@ function apiGet(productId, start, referer) {
     req.on('error', (e) => resolve({ status: 0, body: '', error: e.message }));
     req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: '', error: 'timeout' }); });
     req.end();
-  }));
+  });
 }
 
 /** Server-rendered reviews page → embedded ProductReviewValue objects. */
@@ -325,6 +325,7 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
 
   for (let page = 0; page < MAX_PAGES; page++) {
     if (Date.now() - reviewFetchStart > REVIEW_FETCH_TIMEOUT_MS) break;
+    if (page > 0 && spacingMs > 0) await sleep(spacingMs);
     let res = await apiGet(productId, start, referer);
     if (res.status !== 200) {
       if (res.status === 400 || res.status === 404 || res.status === 410) {
@@ -375,7 +376,6 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
     if (items.length < PER_PAGE) break;
 
     start += PER_PAGE;
-    if (spacingMs > 0) await sleep(spacingMs);
   }
   return { reviews: all, blocked: false };
 }
