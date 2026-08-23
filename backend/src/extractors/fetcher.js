@@ -85,35 +85,6 @@ function loadPlaywright() {
   return playwrightModule;
 }
 
-/*
- * A single reused Chromium instance for all fallback renders (same pattern as
- * renderFetcher). Launching a browser per request is a memory killer on
- * small Render instances — the persisted browser is closed only on process
- * exit, and a broken instance is dropped + relaunched on the next call.
- */
-let renderBrowser = null;
-let renderBrowserPromise = null;
-let renderBrowserEpoch = 0;
-
-function acquireRenderBrowser() {
-  const pw = loadPlaywright();
-  if (!pw) throw new Error('playwright not installed');
-  if (renderBrowserPromise) return renderBrowserPromise;
-  renderBrowserPromise = (async () => {
-    renderBrowser = await pw.chromium.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-      ],
-    });
-    return renderBrowser;
-  })();
-  return renderBrowserPromise;
-}
-
 function looksLikeBlocker(html, status) {
   if (status === 403 || status === 429 || status === 503) return true;
   const lower = String(html || '').toLowerCase().slice(0, 6000);
@@ -132,7 +103,8 @@ function looksLikeBlocker(html, status) {
 async function renderWithPlaywright(url, opts = {}) {
   if (!loadPlaywright()) return { ok: false, html: '', error: 'playwright not installed', rendered: true };
   try {
-    const browser = await acquireRenderBrowser();
+    const { acquireBrowser } = require('./renderFetcher');
+    const browser = await acquireBrowser();
     const context = await browser.newContext({
       userAgent: config.crawler.userAgent,
       viewport: { width: 1440, height: 2200 },
@@ -154,15 +126,6 @@ async function renderWithPlaywright(url, opts = {}) {
     await context.close().catch(() => {});
     return { ok: Boolean(html && html.length > 200), html: html || '', url: finalUrl, rendered: true };
   } catch (err) {
-    // A crashed browser must not poison every later render — drop it so the
-    // next call relaunches, then fail this one gracefully.
-    if (renderBrowser) {
-      renderBrowserEpoch += 1;
-      renderBrowserPromise = null;
-      const broken = renderBrowser;
-      renderBrowser = null;
-      broken.close().catch(() => {});
-    }
     return { ok: false, html: '', error: err.message, rendered: true };
   }
 }

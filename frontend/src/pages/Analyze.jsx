@@ -120,7 +120,7 @@ export default function Analyze() {
 
   const pollJob = useCallback(async (jobId, setSteps) => {
     const started = Date.now();
-    const maxWait = 300000;
+    const maxWait = 480000;
     let lastStatus = null;
     while (Date.now() - started < maxWait) {
       await new Promise((r) => setTimeout(r, 1500));

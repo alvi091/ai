@@ -189,17 +189,10 @@ async function extractProductFromUrl(rawUrl, onProgress) {
   const baseReviews = dedupeReviews([...embeddedReviews, ...domReviews]).slice(0, config.crawler.maxReviews);
 
   let reviews = baseReviews;
-  // For JS-rendered storefronts, do a deep review scrape on the rendered page
-  // (Ajio is handled below by its own fetcher using the already-rendered html,
-  // so skip the extra browser pass for it).
-  if (v.site.renderWait && v.site.id !== 'ajio') {
-    step('Reading reviews');
-    reviews = await scrapeReviews(finalUrl, {
-      site: v.site,
-      embeddedReviews: baseReviews,
-      max: config.crawler.maxReviews,
-    });
-  } else if (v.site.id === 'flipkart') {
+  // Dedicated per-store review fetchers run FIRST (they use paginated APIs
+  // that return far richer data than the generic DOM scraper). Only stores
+  // without a dedicated fetcher fall through to the generic review scrape.
+  if (v.site.id === 'flipkart') {
     // Flipkart's product page shell does not server-render review comments, so
     // pull the full review slate through their reviews API (paced + retried).
     step('Reading Flipkart reviews');
@@ -300,6 +293,15 @@ async function extractProductFromUrl(rawUrl, onProgress) {
         reviews = reviews.slice(0, config.crawler.meeshoReviews);
       }
     }
+  } else if (v.site.renderWait) {
+    // For other JS-rendered storefronts (noon, namshi, carrefour, etc.),
+    // do a deep review scrape on the rendered page.
+    step('Reading reviews');
+    reviews = await scrapeReviews(finalUrl, {
+      site: v.site,
+      embeddedReviews: baseReviews,
+      max: config.crawler.maxReviews,
+    });
   }
   if (config.crawler.flipkartReviews === 0 && v.site.id === 'flipkart') {
     reviews = dedupeReviews(reviews, 0); // keep full (uncapped) slate for flipkart

@@ -27,17 +27,22 @@ const BROWSER_HEADERS = {
 
 function isGeoRedirectBlock(url, finalHtml, finalUrl, siteId) {
   if (!finalHtml) return false;
+  if (!/myntra/i.test(siteId || url || '')) return false;
   const lower = String(finalHtml).toLowerCase();
-  const pathChanged = finalUrl && url && new URL(finalUrl).pathname !== new URL(url).pathname;
-  const buyUrl = /myntra/i.test(siteId || url || '') ? /\/buy(\/|$)/.test(url) : null;
-  if (buyUrl && finalUrl && !/\/buy(\/|$)/.test(finalUrl)) return true;
-  const pageShellMissing =
-    /myntra/i.test(siteId || url || '') &&
-    !/window\.__myx\s*=/.test(finalHtml) &&
-    !lower.includes('pdp-name') &&
-    !lower.includes('pdp-title') &&
-    !lower.includes('styleid');
-  if (pageShellMissing) return true;
+  // If the URL kept its /buy/ path and we can find product signals, it's fine.
+  const buyUrl = /\/buy(\/|$)/.test(url);
+  const buyUrlKept = buyUrl && finalUrl && /\/buy(\/|$)/.test(finalUrl);
+  // Positive product signals — if any of these are present the page is legit.
+  const hasMyx = /window\.__myx\s*=/.test(finalHtml);
+  const hasPdp = lower.includes('pdp-name') || lower.includes('pdp-title') || lower.includes('styleid');
+  const hasPrice = lower.includes('pdp-price') || lower.includes('pdp-final-price');
+  const hasProductShell = hasMyx || hasPdp || hasPrice;
+  // If the URL kept /buy/ and has product content, never block.
+  if (buyUrlKept && hasProductShell) return false;
+  // If URL lost the /buy/ path entirely, that's a geo-redirect.
+  if (buyUrl && !buyUrlKept) return true;
+  // Only block Myntra if the page has no product shell at all.
+  if (!hasProductShell) return true;
   return false;
 }
 
@@ -70,8 +75,8 @@ function acquireBrowser() {
 async function renderPage(url, opts = {}) {
   const timeoutMs = opts.timeoutMs || 20000;
   const renderWait = opts.renderWait || null;
-  const retries = opts.retries != null ? opts.retries : 3;
-  const retryDelayMs = opts.retryDelayMs != null ? opts.retryDelayMs : 5000;
+  const retries = opts.retries != null ? opts.retries : 2;
+  const retryDelayMs = opts.retryDelayMs != null ? opts.retryDelayMs : 3000;
   const siteId = opts.siteId || null;
 
   let last = null;
@@ -153,7 +158,7 @@ async function renderOnce(url, { timeoutMs, renderWait, siteId, attempt = 0 }) {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
     if (renderWait) {
       try {
-        await page.waitForSelector(renderWait, { timeout: 8000 });
+        await page.waitForSelector(renderWait, { timeout: 5000 });
       } catch { /* proceed with whatever rendered */ }
     }
     // Give late-bound React hydration a moment — a bit longer for geo-proxied
