@@ -34,6 +34,86 @@ function extractNextData(html) {
   }
 }
 
+function extractMyxState(html) {
+  const marker = 'window.__myx = ';
+  const idx = String(html || '').indexOf(marker);
+  if (idx === -1) return null;
+  let depth = 0, end = -1;
+  for (let i = idx + marker.length; i < html.length; i++) {
+    const c = html[i];
+    if (c === '{') depth++;
+    else if (c === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+  }
+  if (end === -1) return null;
+  try { return JSON.parse(html.slice(idx + marker.length, end)); } catch { return null; }
+}
+
+function normalizeFromMyx(myx) {
+  const pdp = myx && myx.pdpData;
+  if (!pdp) return {};
+  const base = pdp.productInfo || pdp.product || {};
+  const style = (pdp.analytics && pdp.analytics.style) || base.style || base;
+  const title = (style && (style.styleName || style.name || style.productName)) || base.name || base.title || null;
+  const brand = (style && (style.brand || style.brandName)) || base.brand || null;
+  let price = null, original = null, currency = null;
+  const pr = pdp.priceInfo || base.priceInfo || {};
+  if (pr) {
+    price = num(pr.finalPrice || pr.salePrice || pr.price || pr.offerPrice);
+    original = num(pr.originalPrice || pr.mrp || pr.mrpPrice || pr.oldPrice);
+    currency = pr.currency || 'INR';
+  }
+  if (price == null) price = num(base.salePrice || base.finalPrice || base.price || base.offerPrice);
+  if (original == null) original = num(base.originalPrice || base.mrp || base.listPrice);
+  const images = asArray(base.images || base.image || pdp.images || (pdp.productImageGroup && pdp.productImageGroup.images))
+    .map((i) => (typeof i === 'object' ? i.src || i.url || i.image : i))
+    .filter(Boolean);
+  const mainImage = images[0] || (typeof base.image === 'string' ? base.image : null);
+  const rating = num(pdp.ratings && pdp.ratings.ratingsInfo && pdp.ratings.ratingsInfo.averageRating)
+    || num(base.rating || base.ratingValue);
+  const ratingCount = num(pdp.ratings && pdp.ratings.ratingsInfo && pdp.ratings.ratingsInfo.ratingCount)
+    || num(base.ratingCount || base.ratingsCount);
+  const reviewCount = num(pdp.ratings && pdp.ratings.ratingsInfo && pdp.ratings.ratingsInfo.reviewCount)
+    || num(pdp.ratings && pdp.ratings.reviewInfo && pdp.ratings.reviewInfo.totalReviewCount)
+    || num(base.reviewCount);
+  const description = (base.longDescription || base.shortDescription || base.description || (pdp.features && pdp.features.length && pdp.features.map((f) => f.description || f.title || f).join('\n')) || null);
+  const sku = (style && (style.styleId || style.id || style.productId)) || base.sku || base.id || base.productId || null;
+  const category = (style && (style.analyticsCategory || style.category)) || base.category || base.productCategory || null;
+  const reviewList = [];
+  const reviewInfo = pdp.ratings && pdp.ratings.reviewInfo;
+  if (reviewInfo) {
+    for (const entry of [...(reviewInfo.topReviews || []), ...(reviewInfo.topImageReviews || [])]) {
+      const text = String(entry && (entry.reviewText || entry.review || entry.comment) || '').trim();
+      const ratingVal = num(entry && entry.userRating);
+      if (!text && ratingVal == null) continue;
+      reviewList.push({
+        author: entry.userName || null,
+        rating: ratingVal,
+        text: text.slice(0, 2000),
+        date: entry.timestamp ? new Date(Number(entry.timestamp)).toISOString() : null,
+        verified: Boolean(entry.certifiedBuyer || entry.verified || entry.isCertifiedBuyer),
+        helpful_votes: num(entry.upvotes || entry.helpfulCount) || 0,
+      });
+    }
+  }
+  return {
+    title,
+    brand,
+    price: price != null ? price : null,
+    originalPrice: original != null && original > price ? original : null,
+    currency: currency || 'INR',
+    image: mainImage,
+    images,
+    sku,
+    category,
+    description,
+    rating,
+    ratingCount,
+    reviewCount,
+    reviews: reviewList,
+    _fromMyx: true,
+  };
+}
+
 // Deep-search a JSON tree for the first object that looks like a product.
 // "Looks like a product": has a name/title AND (a price OR an sku/images).
 function findProductNode(root, depth = 0) {
@@ -131,10 +211,26 @@ function extractStructured(html, { siteId = null, baseUrl = null } = {}) {
       nextExtracted = normalizeFromNext(nextData, siteId);
     } catch { nextExtracted = {}; }
   }
+  const myxState = extractMyxState(html);
+  let myxExtracted = {};
+  if (myxState) {
+    try {
+      myxExtracted = normalizeFromMyx(myxState);
+    } catch { myxExtracted = {}; }
+  }
+  const merged = {
+    ...nextExtracted,
+    ...myxExtracted,
+    reviews: [
+      ...(myxExtracted.reviews || []),
+      ...(nextExtracted.reviews || []),
+    ],
+  };
   return {
     __nextDataPresent: Boolean(nextData),
-    ...nextExtracted,
+    __myxPresent: Boolean(myxState),
+    ...merged,
   };
 }
 
-module.exports = { extractStructured, extractNextData, findProductNode };
+module.exports = { extractStructured, extractNextData, extractMyxState, findProductNode };

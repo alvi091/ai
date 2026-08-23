@@ -21,7 +21,7 @@ const { renderPage } = require('./renderFetcher');
 async function fetchPageSmart(url, site = null) {
   const needsRender = site && site.renderWait;
   if (needsRender && config.crawler.playwrightEnabled !== false) {
-    const rendered = await renderPage(url, { renderWait: site.renderWait });
+    const rendered = await renderPage(url, { renderWait: site.renderWait, siteId: site.id || null });
     if (rendered.ok && rendered.html.length >= config.crawler.minHtmlBytes) {
       return {
         ok: true,
@@ -124,11 +124,8 @@ function looksLikeBlocker(html, status) {
     lower.includes('unusual traffic') ||
     lower.includes('enable cookies') ||
     lower.includes('sorry, we just need to make sure') ||
-    lower.includes('myntra') ||
-    lower.includes('redirected') ||
-    lower.includes('automated') ||
-    lower.includes('bot') ||
-    lower.includes('server-side')
+    (lower.includes('automated') && lower.includes('bot')) ||
+    lower.includes('server-side crawling')
   );
 }
 
@@ -140,6 +137,7 @@ async function renderWithPlaywright(url, opts = {}) {
       userAgent: config.crawler.userAgent,
       viewport: { width: 1440, height: 2200 },
       locale: 'en-IN',
+      timezoneId: 'Asia/Kolkata',
       extraHTTPHeaders: {
         accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'accept-language': 'en-IN,en-GB;q=0.9,en;q=0.8,en-US;q=0.7',
@@ -150,7 +148,7 @@ async function renderWithPlaywright(url, opts = {}) {
     });
     const page = await context.newPage();
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs || 18000 });
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1800);
     const html = await page.content();
     const finalUrl = page.url();
     await context.close().catch(() => {});

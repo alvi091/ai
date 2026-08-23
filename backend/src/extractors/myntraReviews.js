@@ -116,7 +116,7 @@ function apiGet(styleId, page) {
           Host: 'www.myntra.com',
           'User-Agent': config.crawler.userAgent,
           Accept: 'application/json, text/plain, */*',
-          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Language': 'en-IN,en-GB;q=0.9,en;q=0.8',
           'x-myntra-fe': '1',
           Origin: 'https://www.myntra.com',
           Referer: `https://www.myntra.com/`,
