@@ -354,10 +354,10 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
     }
 
     let json = null;
-    try { json = JSON.parse(res.body); } catch { return { reviews: all, blocked: false }; }
+    try { json = JSON.parse(res.body); } catch { console.log(`[flipkart-reviews] page=${page} status=${res.status} body_prefix=${(res.body || '').slice(0, 200)}`); return { reviews: all, blocked: false }; }
     const { items, total } = extractReviewArray(json);
     if (total != null) totalCount = total;
-    console.log(`[flipkart-reviews] page=${page} status=${res.status} items=${items.length} total=${total} collected=${all.length}`);
+    console.log(`[flipkart-reviews] page=${page} status=${res.status} items=${items.length} total=${total} collected=${all.length} body_keys=${Object.keys(json || {}).join(',')}`);
 
     let added = 0;
     for (const it of items) {
@@ -386,6 +386,7 @@ async function fetchViaHtml(productId, url, max) {
   // 1) Plain HTTP (paced, cheap).
   const html = await httpGetBody(pageUrl);
   let revs = html ? reviewsFromReviewsPageHtml(html) : [];
+  console.log(`[flipkart-html] url=${pageUrl} html_len=${(html || '').length} reviews_from_html=${revs.length} has_initial_state=${(html || '').includes('__INITIAL_STATE__')} has_next_data=${(html || '').includes('__NEXT_DATA__')}`);
   if (revs.length < 10) {
     // 2) If plain HTTP yielded less than a full SSR page (bot wall), try a
     //    Playwright render.
