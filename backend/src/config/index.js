@@ -32,7 +32,7 @@ module.exports = {
     playwrightEnabled: process.env.PLAYWRIGHT_ENABLED !== 'false',
     minHtmlBytes: parseInt(process.env.CRAWL_MIN_HTML_BYTES, 10) || 8000,
     maxHtmlBytes: parseInt(process.env.CRAWL_MAX_HTML_BYTES, 10) || 6 * 1024 * 1024,
-    maxReviews: parseInt(process.env.CRAWL_MAX_REVIEWS, 10) || 60,
+    maxReviews: parseInt(process.env.CRAWL_MAX_REVIEWS, 10) || 100,
     // Flipkart deep fetch: how many review comments to pull via the reviews API.
     // 0 = fetch ALL available; positive = cap. Only used for flipkart products.
     flipkartReviews: process.env.FLIPKART_MAX_REVIEWS

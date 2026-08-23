@@ -212,6 +212,13 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
 
   const extract = await extractProductFromUrl(url, onProgress);
   timing.crawlMs = Date.now() - t0;
+  if (extract.timing) {
+    timing.validateMs = extract.timing.validateMs;
+    timing.fetchMs = extract.timing.fetchMs;
+    timing.extractMs = extract.timing.extractionMs;
+    timing.reviewsMs = extract.timing.reviewsMs;
+    timing.extractionTotalMs = extract.timing.totalMs;
+  }
 
   if (!extract.ok) {
     console.log(`[timing] FAIL site=${extract.site && extract.site.id} crawl=${timing.crawlMs}ms kind=${extract.kind}`);
@@ -377,7 +384,7 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
   }
 
   timing.totalMs = Date.now() - t0;
-  console.log(`[timing] OK site=${extraction.site && extraction.site.id} reviews=${reviews.length} crawl=${timing.crawlMs}ms catalog=${timing.catalogMs || 0}ms analytics=${timing.analyticsMs || 0}ms gemini=${timing.geminiMs || 0}ms total=${timing.totalMs}ms`);
+  console.log(`[timing] OK site=${extraction.site && extraction.site.id} reviews=${reviews.length} fetch=${timing.fetchMs || 0}ms extract=${timing.extractMs || 0}ms reviews=${timing.reviewsMs || 0}ms catalog=${timing.catalogMs || 0}ms analytics=${timing.analyticsMs || 0}ms gemini=${timing.geminiMs || 0}ms total=${timing.totalMs}ms`);
 
   const enriched = {
     price: {

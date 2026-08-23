@@ -17,7 +17,7 @@ class GeminiProvider extends AIProviderInterface {
     }
   }
 
-  async _call(prompt, schema = null, timeoutMs = 10000) {
+  async _call(prompt, schema = null, timeoutMs = 8000) {
     if (!this.ready || !this.model) throw new Error('Gemini not available');
     let fullPrompt = prompt;
     if (schema) {
@@ -32,7 +32,7 @@ class GeminiProvider extends AIProviderInterface {
     };
     let text;
     let lastErr;
-    const delays = [500, 1500, 3000];
+    const delays = [500, 1500];
     for (let i = 0; i <= delays.length; i++) {
       try {
         text = await attempt();
@@ -146,7 +146,7 @@ User context: ${JSON.stringify({ prompt: context.prompt, budget: context.user?.b
 
 Analytics: ${JSON.stringify(compact)}`;
 
-    const raw = await this._call(prompt, schema, 15000);
+    const raw = await this._call(prompt, schema, 10000);
     const report = this._parseJSON(raw);
     if (!report || !report.verdict) return null;
     if (!Array.isArray(report.sections)) report.sections = [];

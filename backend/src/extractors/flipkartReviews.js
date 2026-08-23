@@ -21,11 +21,10 @@
 const config = require('../config');
 
 const PER_PAGE = 30;
-const DEFAULT_SPACING_MS = parseInt(process.env.FLIPKART_SPACING_MS, 10) || 2000;
+const DEFAULT_SPACING_MS = parseInt(process.env.FLIPKART_SPACING_MS, 10) || 1000;
 // Minimum gap between Flipkart review API calls across the whole process.
-// Observed: ~2s spacing stays clean in production.
 const GLOBAL_GAP_MS = DEFAULT_SPACING_MS;
-const MAX_PAGES = 10;
+const MAX_PAGES = 3;
 
 let lastFlipkartRequestAt = 0;
 
@@ -189,7 +188,7 @@ function apiGet(productId, start, referer) {
           'Sec-Fetch-Mode': 'cors',
           'Sec-Fetch-Site': 'same-origin',
         },
-        timeout: 25000,
+        timeout: 8000,
       },
       (res) => {
         let body = '';
@@ -321,8 +320,11 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
   let totalCount = null;
   let emptyPages = 0;
   let blockedCount = 0;
+  const reviewFetchStart = Date.now();
+  const REVIEW_FETCH_TIMEOUT_MS = 8000;
 
   for (let page = 0; page < MAX_PAGES; page++) {
+    if (Date.now() - reviewFetchStart > REVIEW_FETCH_TIMEOUT_MS) break;
     let res = await apiGet(productId, start, referer);
     if (res.status !== 200) {
       if (res.status === 400 || res.status === 404 || res.status === 410) {
@@ -333,7 +335,7 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
       // only retry a couple of times with small backoffs before bailing to
       // the HTML page copy.
       blockedCount += 1;
-      const backoffMs = Math.min(2000 * Math.pow(2, blockedCount - 1), 8000);
+      const backoffMs = Math.min(1000 * Math.pow(2, blockedCount - 1), 4000);
       if (onSpacing) onSpacing(`Flipkart is rate-limiting the reviews API — backing off ${Math.round(backoffMs / 1000)}s and retrying…`);
       await sleep(backoffMs);
       const retried = await apiGet(productId, start, referer);
@@ -385,17 +387,14 @@ async function fetchViaHtml(productId, url, max) {
   let revs = html ? reviewsFromReviewsPageHtml(html) : [];
   if (revs.length < 10) {
     // 2) If plain HTTP yielded less than a full SSR page (bot wall), try a
-    //    Playwright render. The product-reviews page normally embeds ~10
-    //    top reviews in window.__INITIAL_STATE__ even when the JSON API is
-    //    blocked, but only for real browser clients.
+    //    Playwright render.
     try {
       if (config.crawler.playwrightEnabled !== false) {
         const { renderPage } = require('./renderFetcher');
-        await waitForPace(GLOBAL_GAP_MS);
         const rendered = await renderPage(pageUrl, {
           renderWait: 'div[class*="review"], ul[class*="review"], div._1AtVbE',
           retries: 1,
-          retryDelayMs: 4000,
+          retryDelayMs: 2000,
         });
         if (rendered && rendered.ok && rendered.html) {
           const r2 = reviewsFromReviewsPageHtml(rendered.html);
@@ -430,7 +429,7 @@ function httpGetBody(url) {
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
         },
-        timeout: 25000,
+        timeout: 8000,
       },
       (res) => {
         let body = '';

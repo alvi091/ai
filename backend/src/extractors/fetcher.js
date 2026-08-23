@@ -124,8 +124,8 @@ async function renderWithPlaywright(url, opts = {}) {
       },
     });
     const page = await context.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs || 18000 });
-    await page.waitForTimeout(1800);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs || 12000 });
+    await page.waitForTimeout(1500);
     const html = await page.content();
     const finalUrl = page.url();
     await context.close().catch(() => {});

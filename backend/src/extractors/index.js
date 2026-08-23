@@ -98,23 +98,29 @@ function looksLikeBlocked(html, status) {
 
 async function extractProductFromUrl(rawUrl, onProgress) {
   const step = (msg) => onProgress && onProgress(msg);
+  const tStart = Date.now();
+  const timing = {};
 
   step('Validating & detecting website');
+  const tVal = Date.now();
   const v = await validate(rawUrl);
+  timing.validateMs = Date.now() - tVal;
   if (!v.ok) {
-    return { ok: false, kind: 'validation', error: v.error, status: v.status, site: v.site || null, url: v.url, short: v.short };
+    return { ok: false, kind: 'validation', error: v.error, status: v.status, site: v.site || null, url: v.url, short: v.short, timing };
   }
   if (!v.isProduct) {
     return {
       ok: false,
       kind: 'not_a_product_page',
       error: 'This is a valid website but not a product page \u2014 paste the link to an actual product (title + price + buy button).',
-      url: v.url, status: v.status, site: v.site,
+      url: v.url, status: v.status, site: v.site, timing,
     };
   }
 
   step('Fetching the product page');
+  const tFetch = Date.now();
   const fetched = await fetchPageSmart(v.url, v.site);
+  timing.fetchMs = Date.now() - tFetch;
   if (!fetched.ok) {
     return {
       ok: false,
@@ -123,12 +129,14 @@ async function extractProductFromUrl(rawUrl, onProgress) {
       url: fetched.url || v.url,
       status: fetched.status,
       site: v.site,
+      timing,
     };
   }
   const html = fetched.html;
   const finalUrl = fetched.url || v.url;
 
   step('Extracting structured metadata');
+  const tExtract = Date.now();
   let meta = {};
   let structured = {};
   let ogExtra = { ogDescription: null, metaDescription: null };
@@ -145,6 +153,7 @@ async function extractProductFromUrl(rawUrl, onProgress) {
     ogExtra = {};
     dom = {};
   }
+  timing.extractionMs = Date.now() - tExtract;
 
   const merged = {
     ...mergeExtraction(meta, dom, ogExtra),
@@ -171,6 +180,7 @@ async function extractProductFromUrl(rawUrl, onProgress) {
   const product = normalize(merged, { site: v.site, baseUrl: finalUrl });
 
   step('Collecting reviews');
+  const tReviews = Date.now();
   const ldReviews = fromJsonLd(meta.reviews || [], 200);
   const domReviews = fromDom(html, v.site.selectors, config.crawler.maxReviews);
   const embeddedReviews = [...ldReviews, ...(structured.reviews || [])];
@@ -306,6 +316,7 @@ async function extractProductFromUrl(rawUrl, onProgress) {
   } else {
     reviews = dedupeReviews(reviews).slice(0, config.crawler.maxReviews);
   }
+  timing.reviewsMs = Date.now() - tReviews;
 
   const blocked = looksLikeBlocked(html, fetched.status);
   const extraction = {
@@ -329,12 +340,16 @@ async function extractProductFromUrl(rawUrl, onProgress) {
     htmlSize: html.length,
   };
 
+  timing.totalMs = Date.now() - tStart;
+  console.log(`[extraction] site=${v.site.id} validate=${timing.validateMs}ms fetch=${timing.fetchMs}ms extract=${timing.extractionMs}ms reviews=${timing.reviewsMs}ms total=${timing.totalMs}ms`);
+
   return {
     ok: true,
     product,
     reviews,
     extraction,
     validation: v,
+    timing,
   };
 }
 
