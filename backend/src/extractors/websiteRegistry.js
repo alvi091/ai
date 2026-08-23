@@ -224,6 +224,7 @@ const STORES = [
     selectors: { ...GENERIC, ...SELECTORS.myntra },
     isProductPath: (path) => /\/buy\/?$/.test(path) || /\/buy\//.test(path),
     structured: true,
+    renderWait: '[class*="pdp-name"], [class*="product-details"]',
   },
   {
     id: 'ajio',

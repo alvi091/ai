@@ -95,9 +95,7 @@ function looksLikeBlocker(html, status) {
     lower.includes('enable cookies') ||
     lower.includes('sorry, we just need to make sure') ||
     (lower.includes('automated') && lower.includes('bot')) ||
-    lower.includes('server-side crawling') ||
-    // Myntra geo-block: redirects to a page without product data
-    (lower.includes('myntra') && !lower.includes('window.__myx') && !lower.includes('pdp-name') && lower.includes('redirect'))
+    lower.includes('server-side crawling')
   );
 }
 

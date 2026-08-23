@@ -252,7 +252,7 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
       extraction.blocked || extraction.fetchedStatus === 403 || extraction.fetchedStatus === 429;
     const mismatch = contentMismatch(extraction.sourceUrl || url, product.title || '');
     if (mismatch || blockedFlag || !hasData) {
-      console.log(`[timing] BLOCKED site=${extraction.site.id} crawl=${timing.crawlMs}ms`);
+      console.log(`[timing] BLOCKED site=${extraction.site.id} crawl=${timing.crawlMs}ms mismatch=${mismatch} blockedFlag=${blockedFlag} hasData=${hasData} title=${(product.title || '').slice(0, 60)} price=${product.price} reviews=${reviews.length}`);
       return {
         ok: false,
         kind: 'store_blocked',
