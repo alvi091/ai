@@ -32,9 +32,8 @@ async function fetchPageSmart(url, site = null) {
         rendered: true,
       };
     }
-    if (config.crawler.playwrightEnabled !== false) {
-      return { ok: false, error: rendered.error || 'Could not render the product page (blocked or broken).', url, status: 0, html: '', contentType: '', rendered: true };
-    }
+    // Playwright failed — fall through to plain HTTP instead of giving up.
+    console.log(`[fetcher] Playwright failed for ${site.id || url}, trying plain HTTP`);
   }
   return fetchPage(url);
 }
@@ -96,7 +95,9 @@ function looksLikeBlocker(html, status) {
     lower.includes('enable cookies') ||
     lower.includes('sorry, we just need to make sure') ||
     (lower.includes('automated') && lower.includes('bot')) ||
-    lower.includes('server-side crawling')
+    lower.includes('server-side crawling') ||
+    // Myntra geo-block: redirects to a page without product data
+    (lower.includes('myntra') && !lower.includes('window.__myx') && !lower.includes('pdp-name') && lower.includes('redirect'))
   );
 }
 

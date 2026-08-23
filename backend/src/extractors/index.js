@@ -114,13 +114,6 @@ async function extractProductFromUrl(rawUrl, onProgress) {
   }
 
   step('Fetching the product page');
-  // Flipkart's whole domain is on a strict request budget — acquire a shared
-  // pace slot before the page fetch too, so this request and a request running
-  // right after it (user pasting several links) don't burst the API together.
-  if (v.site.id === 'flipkart') {
-    if (onProgress) onProgress('Reading Flipkart product page');
-    await acquireFlipkartSlot(DEFAULT_SPACING_MS);
-  }
   const fetched = await fetchPageSmart(v.url, v.site);
   if (!fetched.ok) {
     return {
@@ -138,23 +131,18 @@ async function extractProductFromUrl(rawUrl, onProgress) {
   step('Extracting structured metadata');
   let meta = {};
   let structured = {};
-  try {
-    const $ = cheerio.load(html);
-    meta = harvest($, finalUrl);
-    structured = extractStructured(html, { siteId: v.site.id, baseUrl: finalUrl });
-  } catch {
-    meta = {};
-    structured = {};
-  }
-
-  step('Reading page structure');
   let ogExtra = { ogDescription: null, metaDescription: null };
   let dom = {};
   try {
     const $ = cheerio.load(html);
+    meta = harvest($, finalUrl);
+    structured = extractStructured(html, { siteId: v.site.id, baseUrl: finalUrl });
     ogExtra = ogExtras($);
     dom = extractDom(html, v.site.selectors);
   } catch {
+    meta = {};
+    structured = {};
+    ogExtra = {};
     dom = {};
   }
 

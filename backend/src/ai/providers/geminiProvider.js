@@ -123,37 +123,30 @@ class GeminiProvider extends AIProviderInterface {
       dataQuality: { level: 'string', notes: 'string[]' },
     };
 
+    // Trim payload — only include fields Gemini needs, skip verbose/redundant data
     const compact = {
       product: analytics.product,
       price: analytics.price,
-      trend: { direction: analytics.trend?.direction, changePercent: analytics.trend?.changePercent, volatility: analytics.trend?.volatility, nearLow: analytics.trend?.nearLow, nearHigh: analytics.trend?.nearHigh, windowDays: analytics.trend?.windowDays },
-      reviews: { totalReviews: analytics.reviews?.totalReviews, averageRating: analytics.reviews?.averageRating, positivePercent: analytics.reviews?.positivePercent, negativePercent: analytics.reviews?.negativePercent, distribution: analytics.reviews?.distribution, mostLoved: analytics.reviews?.mostLoved, mostComplained: analytics.reviews?.mostComplained, reviewConfidence: analytics.reviews?.reviewConfidence },
+      trend: { direction: analytics.trend?.direction, changePercent: analytics.trend?.changePercent, nearLow: analytics.trend?.nearLow, nearHigh: analytics.trend?.nearHigh },
+      reviews: { totalReviews: analytics.reviews?.totalReviews, averageRating: analytics.reviews?.averageRating, positivePercent: analytics.reviews?.positivePercent, negativePercent: analytics.reviews?.negativePercent, mostLoved: (analytics.reviews?.mostLoved || []).slice(0, 3), mostComplained: (analytics.reviews?.mostComplained || []).slice(0, 3) },
       sentiment: analytics.sentiment,
       popularity: analytics.popularity,
       risk: analytics.risk,
       worth: analytics.worth,
-      category: { name: analytics.category?.name, focusAreas: analytics.category?.focusAreas, whatMatters: analytics.category?.whatMatters, timing: analytics.category?.timing, valueRetention: analytics.category?.valueRetention, stats: analytics.category?.stats },
-      suitability: analytics.suitability,
+      category: { name: analytics.category?.name, focusAreas: analytics.category?.focusAreas, timing: analytics.category?.timing },
+      suitability: analytics.suitability ? { overallFit: analytics.suitability.overallFit, whyFits: (analytics.suitability.whyFits || []).slice(0, 3), whyNot: (analytics.suitability.whyNot || []).slice(0, 3) } : null,
       betterAlternative: analytics.betterAlternative,
-      dataQuality: analytics.dataQuality,
     };
 
-    const prompt = `You are a veteran product consultant writing a unique, evidence-based buying analysis. The backend has already computed every number in the attached JSON. NEVER invent facts, prices, ratings, or percentages — use ONLY the values provided. Do not ask the model to calculate scores.
+    const prompt = `You are a product consultant writing a buying analysis. Use ONLY the provided data — never invent facts.
 
-Rules:
-1. Uniqueness: Every report must read like a human expert spent hours on THIS product. Choose the narrative angle from the product's actual data — if battery complaints dominate, write about battery; if the price is at a floor, focus on timing; if the product is mid-pack in its category, lean on category positioning. Never reproduce the same structure or phrasing for different products.
-2. Dynamic sections: Only write sections that the data supports. If review evidence is thin, say so and lower confidence. If price history is missing, do not fake a price-timing analysis. Adapt, do not template.
-3. Verdict: Pick ONE verdict key from the allowed set and justify it with the computed numbers in the "rationale". Confidence must reflect data quality — lower it when evidence is sparse.
-4. Tone: Write like a sharp, honest product consultant. Natural, specific, no marketing fluff, no filler. Vary sentence structure.
-5. Category awareness: Use the category focus areas and "whatMatters" framing to decide what to evaluate.
-6. Transparency: Every section must state which data was analyzed (evidence array) and why the conclusion was reached. Add a confidence number to every section.
-7. Personalization: If user context exists (budget, brands, persona), weave a short personalized note into "personalization". Otherwise personalization.present = false.
+Write a verdict, a short summary (2-3 paragraphs), 2-4 analysis sections with evidence, and a personalization note if user context exists. Pick one verdict key from: BUY_NOW, WAIT, BUY_DURING_SALE, GOOD_BUT_OVERPRICED, BEST_IN_CATEGORY, NOT_RECOMMENDED, EXCELLENT_LONG_TERM_VALUE, BETTER_ALTERNATIVES.
 
-Context (user, if any): ${JSON.stringify({ prompt: context.prompt, budget: context.user?.budgetMax, preferredBrands: context.user?.preferredBrands })}
+User context: ${JSON.stringify({ prompt: context.prompt, budget: context.user?.budgetMax, brands: context.user?.preferredBrands })}
 
-Computed analytics JSON: ${JSON.stringify(compact)}`;
+Analytics: ${JSON.stringify(compact)}`;
 
-    const raw = await this._call(prompt, schema, 20000);
+    const raw = await this._call(prompt, schema, 15000);
     const report = this._parseJSON(raw);
     if (!report || !report.verdict) return null;
     if (!Array.isArray(report.sections)) report.sections = [];

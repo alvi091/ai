@@ -21,14 +21,11 @@
 const config = require('../config');
 
 const PER_PAGE = 30;
-const DEFAULT_SPACING_MS = 3000;
-// Minimum gap between ANY Flipkart HTTP call across the whole process, so
-// sequential product analyses (user pasting several links) never trip the
-// anti-bot limiter — it counts requests from our IP, not pages within one run.
-// Observed: ~4.5s spacing stays clean; 2.5s occasionally trips the wall.
-// Tuned to 3.5s (safe) in production; override via env if needed.
-const GLOBAL_GAP_MS = parseInt(process.env.FLIPKART_SPACING_MS, 10) || 3500;
-const MAX_PAGES = 400;
+const DEFAULT_SPACING_MS = parseInt(process.env.FLIPKART_SPACING_MS, 10) || 2000;
+// Minimum gap between Flipkart review API calls across the whole process.
+// Observed: ~2s spacing stays clean in production.
+const GLOBAL_GAP_MS = DEFAULT_SPACING_MS;
+const MAX_PAGES = 10;
 
 let lastFlipkartRequestAt = 0;
 

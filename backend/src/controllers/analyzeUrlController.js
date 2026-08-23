@@ -1,26 +1,23 @@
 /*
  * Analyze-URL controllers.
- *   POST /api/analyze  { url, prompt? }  -> report (sync) OR { jobId } (queued)
- *   GET  /api/analyze/:jobId             -> queued job status/progress/result
+ *   POST /api/analyze  { url, prompt? }  -> report (sync) OR { jobId, status }
+ *   GET  /api/analyze/:jobId             -> job status/progress/result
  *
- * Behavior by environment:
- *   - Production (REDIS_URL set): enqueues a BullMQ job and returns { jobId };
- *     the frontend polls GET /:jobId. The heavy crawl + render + LLM runs in the
- *     worker fleet, so bursts back up in the queue instead of OOM the API.
- *   - Repeat hits: served instantly from AnalysisCache (12h TTL).
- *   - No Redis (local dev): runs inline with a hard concurrency cap; saturated
- *     requests get HTTP 429 instead of unbounded parallel crawls.
- *
- * Every submission logs a cache-hit / fresh line so repeat-vs-novel traffic can
- * be measured after launch and worker instances sized accordingly.
+ * Behavior:
+ *   - Cache hit: return instantly (12h TTL).
+ *   - Capacity available (inlineActive < INLINE_MAX): run inline, return result
+ *     directly. The user sees no "queued" state — analysis starts immediately.
+ *   - At capacity + Redis available: enqueue BullMQ job, return { jobId,
+ *     status: "queued" }. The frontend polls GET /:jobId.
+ *   - At capacity + no Redis: HTTP 429.
  */
 
 const { analyzeUrl } = require('../services/analyzeUrlService');
 const { readCache, writeCache, createJob, normalizeUrlForCache } = require('../services/jobQueue');
 const prisma = require('../database');
 
-const useQueue = Boolean(process.env.REDIS_URL) && process.env.ANALYZE_QUEUE_ENABLED !== 'false';
 const INLINE_MAX = parseInt(process.env.ANALYZE_INLINE_MAX, 10) || 3;
+const queueEnabled = Boolean(process.env.REDIS_URL) && process.env.ANALYZE_QUEUE_ENABLED !== 'false';
 let inlineActive = 0;
 
 function invalidUrl(url) {
@@ -39,9 +36,9 @@ const analyzeUrlHandler = async (req, res, next) => {
 
     const refresh = body.refresh === true || body.refresh === 'true' || req.query.refresh === 'true';
     const normalizedUrl = normalizeUrlForCache(url);
+    const prompt = typeof body.prompt === 'string' && body.prompt.trim() ? body.prompt.trim() : null;
 
-    // Cache hit -> return instantly without re-crawling the same URL (unless a
-    // refresh was requested, or the entry has aged past its TTL).
+    // 1. Cache hit -> return instantly.
     if (!refresh) {
       const cached = await readCache(normalizedUrl);
       if (cached && cached.ok) {
@@ -50,46 +47,39 @@ const analyzeUrlHandler = async (req, res, next) => {
       }
     }
 
-    // Queue path (production): enqueue and hand the frontend a jobId to poll.
-    if (useQueue) {
+    // 2. Capacity available -> run inline immediately (no "queued" state).
+    if (inlineActive < INLINE_MAX) {
+      inlineActive += 1;
       try {
-        const jobId = await createJob({
-          url,
-          normalizedUrl,
-          prompt: typeof body.prompt === 'string' && body.prompt.trim() ? body.prompt.trim() : null,
-        });
-        console.log(`[analyze] queued job=${jobId} ms=${Date.now() - t0}`);
-        return res.json({ ok: true, queued: true, jobId, requestedUrl: url });
+        const result = await analyzeUrl({ url, prompt });
+        if (result && result.ok) {
+          await writeCache(normalizedUrl, result);
+        }
+        console.log(`[analyze] inline ms=${Date.now() - t0} site=${result && result.site && result.site.id} ok=${Boolean(result && result.ok)}`);
+        return res.json(result);
+      } finally {
+        inlineActive -= 1;
+      }
+    }
+
+    // 3. At capacity -> queue if Redis available, else 429.
+    if (queueEnabled) {
+      try {
+        const jobId = await createJob({ url, normalizedUrl, prompt });
+        console.log(`[analyze] queued job=${jobId} ms=${Date.now() - t0} active=${inlineActive}`);
+        return res.json({ ok: true, queued: true, jobId, status: 'queued', requestedUrl: url });
       } catch (err) {
-        console.error('[analyze] queue enqueue failed — falling back to inline:', err && err.message);
+        console.error('[analyze] queue enqueue failed:', err && err.message);
       }
     }
 
-    // Inline path (fallback / local dev) — bound concurrency so bursts can't OOM.
-    if (inlineActive >= INLINE_MAX) {
-      console.log(`[analyze] busy-429 ms=${Date.now() - t0} active=${inlineActive}`);
-      return res.status(429).json({
-        ok: false,
-        kind: 'busy',
-        error: 'We are processing too many analyses right now — please retry in a few seconds.',
-      });
-    }
-
-    inlineActive += 1;
-    try {
-      const result = await analyzeUrl({
-        url,
-        prompt: typeof body.prompt === 'string' && body.prompt.trim() ? body.prompt.trim() : null,
-      });
-
-      if (result && result.ok) {
-        await writeCache(normalizedUrl, result);
-      }
-      console.log(`[analyze] freshly-crawled-inline ms=${Date.now() - t0} site=${result && result.site && result.site.id} ok=${Boolean(result && result.ok)}`);
-      return res.json(result);
-    } finally {
-      inlineActive -= 1;
-    }
+    // 4. No capacity, no queue -> 429.
+    console.log(`[analyze] busy-429 ms=${Date.now() - t0} active=${inlineActive}`);
+    return res.status(429).json({
+      ok: false,
+      kind: 'busy',
+      error: 'We are processing too many analyses right now — please retry in a few seconds.',
+    });
   } catch (err) {
     return next(err);
   }

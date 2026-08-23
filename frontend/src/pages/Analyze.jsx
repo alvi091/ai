@@ -87,7 +87,7 @@ export default function Analyze() {
       if (payload?.queued && payload?.jobId) {
         clearTimers();
         setSimSteps([]);
-        setConfirmedSteps([`Queued — analysis ${payload.jobId}`]);
+        setConfirmedSteps(['Preparing your analysis\u2026']);
         await pollJob(payload.jobId, setConfirmedSteps);
         return;
       }
@@ -129,12 +129,17 @@ export default function Analyze() {
       const job = j.data;
       if (job.status !== lastStatus) {
         lastStatus = job.status;
-        if (job.status === 'retrying' || (job.error && job.status !== 'done' && job.status !== 'failed')) {
+        if (job.status === 'running') {
+          if (setSteps) setSteps((p) => {
+            const filtered = (p || []).filter((s) => !s.startsWith('Preparing'));
+            return [...filtered, 'Analyzing your product\u2026'];
+          });
+        } else if (job.status === 'retrying' || (job.error && job.status !== 'done' && job.status !== 'failed')) {
           const msg = job.error && job.error.length < 120
             ? job.error
-            : `Re-queued — analysis ${jobId} will resume shortly`;
+            : 'Retrying analysis\u2026';
           if (setSteps) setSteps((p) => {
-            const filtered = (p || []).filter((s) => !s.startsWith('Re-queued') && !s.startsWith('All ') && !s.includes('slots are busy'));
+            const filtered = (p || []).filter((s) => !s.startsWith('Retrying') && !s.startsWith('All ') && !s.includes('slots are busy'));
             return [...filtered, msg];
           });
         }

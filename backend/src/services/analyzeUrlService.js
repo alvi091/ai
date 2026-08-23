@@ -132,7 +132,7 @@ async function catalogContext(raw) {
   try {
     rows = await prisma.product.findMany({
       where: { category: { equals: rawCat, mode: 'insensitive' } },
-      take: 200,
+      take: 100,
       select: {
         id: true, name: true, brand: true, price: true, rating: true, reviews: true,
         image: true, category: true, currency: true,
@@ -143,20 +143,20 @@ async function catalogContext(raw) {
   }
   if (rows.length) return { products: rows, matchesRawCategory: true, inferred: null };
 
-  // Broad includes fallback.
-  const broad = [];
+  // Broad includes fallback — use contains instead of loading 500 rows.
   try {
-    const all = await prisma.product.findMany({
-      take: 500,
+    rows = await prisma.product.findMany({
+      where: {
+        OR: [
+          { category: { contains: rawCat, mode: 'insensitive' } },
+          { name: { contains: rawCat, mode: 'insensitive' } },
+        ],
+      },
+      take: 100,
       select: { id: true, name: true, brand: true, price: true, rating: true, reviews: true, image: true, category: true, currency: true },
     });
-    for (const p of all) {
-      const cat = String(p.category || '').toLowerCase();
-      if (cat.includes(rawCat) || rawCat.includes(cat)) broad.push(p);
-      if (broad.length >= 200) break;
-    }
   } catch { /* ignore */ }
-  return { products: broad, matchesRawCategory: false, inferred: null };
+  return { products: rows, matchesRawCategory: false, inferred: null };
 }
 
 function slugTokens(path) {
@@ -205,11 +205,16 @@ function contentMismatch(urlPath, title) {
  * @param {object}   [opts.intent] parsed intent for suitability scoring
  */
 async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
+  const t0 = Date.now();
   const progress = [];
   const onProgress = (msg) => progress.push(msg);
+  const timing = {};
 
   const extract = await extractProductFromUrl(url, onProgress);
+  timing.crawlMs = Date.now() - t0;
+
   if (!extract.ok) {
+    console.log(`[timing] FAIL site=${extract.site && extract.site.id} crawl=${timing.crawlMs}ms kind=${extract.kind}`);
     return {
       ok: false,
       error: extract.error || 'Could not analyze this URL.',
@@ -219,6 +224,7 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
       resolvedUrl: extract.url || url,
       site: extract.site || null,
       progress,
+      timing,
     };
   }
 
@@ -246,6 +252,7 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
       extraction.blocked || extraction.fetchedStatus === 403 || extraction.fetchedStatus === 429;
     const mismatch = contentMismatch(extraction.sourceUrl || url, product.title || '');
     if (mismatch || blockedFlag || !hasData) {
+      console.log(`[timing] BLOCKED site=${extraction.site.id} crawl=${timing.crawlMs}ms`);
       return {
         ok: false,
         kind: 'store_blocked',
@@ -255,6 +262,7 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
         site: extraction.site,
         status: extraction.fetchedStatus || null,
         progress,
+        timing,
       };
     }
   }
@@ -263,6 +271,7 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
   // reason about — fail fast with a friendly message instead of analyzing air.
   const hasAnyData = Boolean(product.title) || (Number(product.price) > 0) || reviews.length > 0;
   if (!hasAnyData) {
+    console.log(`[timing] SPARSE site=${extraction.site && extraction.site.id} crawl=${timing.crawlMs}ms`);
     return {
       ok: false,
       kind: 'sparse_page',
@@ -271,6 +280,7 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
       resolvedUrl: extraction.sourceUrl || url,
       site: extraction.site,
       progress,
+      timing,
     };
   }
 
@@ -284,7 +294,9 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
   const inferred = inferCategory(raw.title || raw.name || '');
   if (inferred && inferred !== raw.category) raw.category = inferred;
 
+  const tCat = Date.now();
   const ctx = await catalogContext(raw);
+  timing.catalogMs = Date.now() - tCat;
   const categoryProducts = ctx.products;
 
   const alternatives = categoryProducts
@@ -292,6 +304,7 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
     .sort((a, b) => (b.rating || 0) - (a.rating || 0))
     .slice(0, 4);
 
+  const tAnalytics = Date.now();
   const analytics = analyzeProduct({
     product: raw,
     categoryProducts,
@@ -299,13 +312,16 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
     user,
     intent,
   });
+  timing.analyticsMs = Date.now() - tAnalytics;
 
   const reportContext = {
     prompt: prompt || `Product pasted from ${extraction.site.label}.`,
     user,
     alternatives,
   };
+  const tGemini = Date.now();
   const report = await generateReport(analytics, reportContext);
+  timing.geminiMs = Date.now() - tGemini;
 
   /* ---------- Deterministic intelligence enrichment ---------- */
   const marketPrices = (categoryProducts || [])
@@ -359,6 +375,9 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
       samples: (m.samples || []).slice(0, 2).map((s) => String(s).slice(0, 200)),
     };
   }
+
+  timing.totalMs = Date.now() - t0;
+  console.log(`[timing] OK site=${extraction.site && extraction.site.id} reviews=${reviews.length} crawl=${timing.crawlMs}ms catalog=${timing.catalogMs || 0}ms analytics=${timing.analyticsMs || 0}ms gemini=${timing.geminiMs || 0}ms total=${timing.totalMs}ms`);
 
   const enriched = {
     price: {
@@ -448,6 +467,7 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
       ...extraction,
       progress,
     },
+    timing,
     progress,
   };
 }
