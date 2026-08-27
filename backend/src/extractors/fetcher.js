@@ -2,10 +2,9 @@
  * Fetcher — pulls the raw HTML for a URL.
  *
  * Strategy:
- *   1. Plain HTTP GET (follows redirects, UA, timeout) → best for static pages.
- *   2. If the response looks like a bot-wall, a login-wall, or is too small to be
- *      a real product page, optionally retry with a headless browser (Playwright)
- *      when it is installed + enabled. Falls back gracefully when it isn't.
+ *   1. If Bright Data Web Unlocker is configured, use it as primary fetcher.
+ *      It handles IP rotation, CAPTCHA solving, JS rendering, and retries.
+ *   2. Otherwise, fall back to plain HTTP GET → Playwright render if blocked.
  *
  * Returned document is the HTML string; downstream uses the final URL for
  * canonicalization and relative-image resolution.
@@ -13,12 +12,36 @@
 
 const config = require('../config');
 const { renderPage } = require('./renderFetcher');
+const { fetchViaUnlocker } = require('../services/webUnlocker');
 
 /**
- * Route-aware fetch: JS storefronts need a real browser render, everything else
- * (notably Amazon) uses the fast plain-HTTP path.
+ * Route-aware fetch: Web Unlocker first (if configured), then Playwright, then plain HTTP.
  */
 async function fetchPageSmart(url, site = null) {
+  // 1. Try Web Unlocker first — handles everything (IP rotation, CAPTCHA, JS rendering)
+  if (config.webUnlocker?.enabled) {
+    const unlockerResult = await fetchViaUnlocker(url, {
+      proxy: 'residential:in',
+      mode: 'auto',
+      enableSolver: true,
+      jsWaitSelector: site?.renderWait || undefined,
+      jsWaitTimeout: 3000,
+    });
+    if (unlockerResult.ok && unlockerResult.html.length >= config.crawler.minHtmlBytes) {
+      return {
+        ok: true,
+        url: unlockerResult.url || url,
+        html: unlockerResult.html,
+        status: 200,
+        contentType: 'text/html',
+        rendered: true,
+        source: 'web-unlocker',
+      };
+    }
+    console.log(`[fetcher] Web Unlocker failed for ${site?.id || url}: ${unlockerResult.error}, falling back`);
+  }
+
+  // 2. Fallback: existing Playwright / plain HTTP logic
   const needsRender = site && site.renderWait;
   if (needsRender && config.crawler.playwrightEnabled !== false) {
     const rendered = await renderPage(url, { renderWait: site.renderWait, siteId: site.id || null });
@@ -30,9 +53,9 @@ async function fetchPageSmart(url, site = null) {
         status: 200,
         contentType: 'text/html',
         rendered: true,
+        source: 'playwright',
       };
     }
-    // Playwright failed — fall through to plain HTTP instead of giving up.
     console.log(`[fetcher] Playwright failed for ${site.id || url}, trying plain HTTP`);
   }
   return fetchPage(url, site);
@@ -124,8 +147,8 @@ async function renderWithPlaywright(url, opts = {}) {
       },
     });
     const page = await context.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs || 12000 });
-    await page.waitForTimeout(1500);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs || 10000 });
+    await page.waitForTimeout(800);
     const html = await page.content();
     const finalUrl = page.url();
     await context.close().catch(() => {});
@@ -143,11 +166,25 @@ async function fetchPage(url, site) {
   let first = await httpGet(url);
 
   if (!first.ok) {
+    // If Web Unlocker is available, try it as fallback for failed HTTP
+    if (config.webUnlocker?.enabled) {
+      const unlockerResult = await fetchViaUnlocker(url, { proxy: 'residential:in', mode: 'auto' });
+      if (unlockerResult.ok) {
+        return { ok: true, url: unlockerResult.url || url, html: unlockerResult.html, status: 200, contentType: 'text/html', rendered: true, source: 'web-unlocker-fallback' };
+      }
+    }
     return first;
   }
 
   if (isMyntraGeoBlock(first.html, first.url || url)) {
     console.log(`[fetcher] Myntra geo-block detected (no product signals), skipping Playwright`);
+    // Try Web Unlocker for Myntra geo-block
+    if (config.webUnlocker?.enabled) {
+      const unlockerResult = await fetchViaUnlocker(url, { proxy: 'residential:in', mode: 'js_rendering' });
+      if (unlockerResult.ok && unlockerResult.html.length >= config.crawler.minHtmlBytes) {
+        return { ok: true, url: unlockerResult.url || url, html: unlockerResult.html, status: 200, contentType: 'text/html', rendered: true, source: 'web-unlocker-myntra' };
+      }
+    }
     return { ok: false, error: 'Myntra blocked this request from our server location.', url, html: first.html, status: first.status, contentType: first.contentType, rendered: false, blocked: true };
   }
 
@@ -156,6 +193,13 @@ async function fetchPage(url, site) {
     (looksLikeBlocker(first.html, first.status) || first.html.length < config.crawler.minHtmlBytes);
 
   if (renderable) {
+    // Try Web Unlocker first for blocked pages
+    if (config.webUnlocker?.enabled) {
+      const unlockerResult = await fetchViaUnlocker(url, { proxy: 'residential:in', mode: 'auto', enableSolver: true });
+      if (unlockerResult.ok && unlockerResult.html.length >= config.crawler.minHtmlBytes) {
+        return { ok: true, url: unlockerResult.url || first.url || url, html: unlockerResult.html, status: 200, contentType: 'text/html', rendered: true, source: 'web-unlocker-blocked' };
+      }
+    }
     const rendered = await renderWithPlaywright(url);
     if (rendered.ok && rendered.html.length >= config.crawler.minHtmlBytes) {
       return {
@@ -165,6 +209,7 @@ async function fetchPage(url, site) {
         status: first.status,
         contentType: first.contentType,
         rendered: true,
+        source: 'playwright',
       };
     }
   }

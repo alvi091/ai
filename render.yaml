@@ -11,7 +11,7 @@
 #   2. Render -> New -> Blueprint Instance -> pick the repo (it auto-reads render.yaml).
 #   3. Fill the `sync: false` secrets in the dashboard during creation:
 #      DATABASE_URL (Supabase), GEMINI_API_KEY, RAPIDAPI_KEY, CORS_ORIGIN,
-#      SMTP_HOST, SMTP_USER, SMTP_PASS.
+#      SMTP_HOST, SMTP_USER, SMTP_PASS, WEB_UNLOCKER_KEY, SERP_API_KEY.
 #   4. Postgres is Supabase (external). Run once against it:
 #        npx prisma db push && npm run prisma:seed
 #      (Migrations aren't used yet - schema.prisma is db-push managed.)
@@ -87,6 +87,16 @@ services:
         value: "900000"
       - key: RATE_LIMIT_MAX
         value: "3000"
+      # Bright Data Web Unlocker
+      - key: WEB_UNLOCKER_KEY
+        sync: false
+      - key: WEB_UNLOCKER_ZONE
+        value: ayymus
+      # Bright Data SERP API
+      - key: SERP_API_KEY
+        sync: false
+      - key: SERP_API_ZONE
+        value: serp_api1
 
   # ---------- Background worker ----------
   - type: worker
@@ -155,3 +165,13 @@ services:
         value: "0"
       - key: MEESHO_MAX_REVIEWS
         value: "0"
+      # Bright Data Web Unlocker
+      - key: WEB_UNLOCKER_KEY
+        sync: false
+      - key: WEB_UNLOCKER_ZONE
+        value: ayymus
+      # Bright Data SERP API
+      - key: SERP_API_KEY
+        sync: false
+      - key: SERP_API_ZONE
+        value: serp_api1

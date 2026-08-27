@@ -108,4 +108,21 @@ export const admin = {
   updatePrices: (updates) => api.post('/admin/prices', { updates }),
 };
 
+export const chat = {
+  create: (data) => api.post('/chat', data),
+  getSession: (sessionId) => api.get(`/chat/${sessionId}`),
+  sendMessage: (sessionId, data) => api.post(`/chat/${sessionId}/message`, data),
+};
+
+export const marketplace = {
+  compare: (data) => api.post('/marketplace/compare', data),
+};
+
+export const research = {
+  run: (data) => api.post('/research', data),
+  analyze: (data) => api.post('/research/analyze', data),
+  getProblems: (data) => api.post('/research/problems', data),
+  getAlternatives: (data) => api.post('/research/alternatives', data),
+};
+
 export default api;

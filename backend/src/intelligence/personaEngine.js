@@ -19,6 +19,14 @@ const PERSONAS = {
   business: { label: 'Business owners', icon: 'briefcase' },
   creator: { label: 'Content creators', icon: 'video' },
   casual: { label: 'Casual users', icon: 'smile' },
+  skincare: { label: 'Skincare enthusiasts', icon: 'sparkles' },
+  haircare: { label: 'Haircare focused', icon: 'droplets' },
+  oily_skin: { label: 'Oily skin types', icon: 'droplet' },
+  sensitive: { label: 'Sensitive skin', icon: 'shield' },
+  budget: { label: 'Budget-conscious buyers', icon: 'wallet' },
+  premium: { label: 'Premium buyers', icon: 'crown' },
+  men: { label: 'Men', icon: 'user' },
+  women: { label: 'Women', icon: 'user' },
 };
 
 const CATEGORY_MAP = [
@@ -33,6 +41,12 @@ const CATEGORY_MAP = [
   { re: /watch|smartwatch|band/i, personas: ['fitness', 'professional', 'casual'] },
   { re: /furniture|sofa|desk|chair/i, personas: ['office', 'parents', 'business'] },
   { re: /kitchen|blender|cookware|refrigerator/i, personas: ['parents', 'casual'] },
+  { re: /shampoo|conditioner|hair.?oil|hair.?serum|hair.?mask|hair.?treatment/i, personas: ['haircare', 'skincare', 'women', 'men'] },
+  { re: /face.?wash|cleanser|moisturizer|sunscreen|serum|toner|scrub|face.?cream|face.?pack/i, personas: ['skincare', 'oily_skin', 'sensitive', 'women', 'men'] },
+  { re: /soap|body.?wash|lotion|cream|deodorant|perfume|fragrance/i, personas: ['skincare', 'casual', 'men', 'women'] },
+  { re: /makeup|lipstick|foundation|concealer|eyeliner|blush|mascara/i, personas: ['premium', 'women', 'creator'] },
+  { re: /dandruff|anti.?dandruff|scalp/i, personas: ['haircare', 'sensitive', 'men', 'women'] },
+  { re: /acne|pimple|pigmentation|dark.?spot|brightening/i, personas: ['skincare', 'sensitive', 'men', 'women'] },
 ];
 
 function specText(product, rows, specsObj) {
@@ -64,6 +78,7 @@ function dedupeByKey(list) {
 function specFitItems(product, specRows, specsObj) {
   const text = specText(product, specRows, specsObj);
   const fits = [];
+  const isBeauty = /shampoo|face.?wash|soap|cream|lotion|serum|moisturizer|sunscreen|makeup|skincare|haircare|dandruff|acne|pimple/i.test(text);
 
   const ram = text.match(/\b(\d{1,3})\s?gb\s?ram\b/i);
   const hasGpu = /(rtx|gtx|radeon\s?rx|\barc\b)/i.test(text);
@@ -98,7 +113,15 @@ function specFitItems(product, specRows, specsObj) {
     fits.push(personaItem('office', 'good', 'Easy to carry between desks'));
   }
   if (battery && Number(battery[1]) >= 5000) fits.push(personaItem('travel', 'high', 'Large battery for away-from-charge days'));
-  if (price && price > 0 && price <= 300) fits.push(personaItem('student', 'good', 'Sits inside most student budgets'));
+
+  // Only add price-based personas for tech products, not beauty/skincare
+  if (!isBeauty && price && price > 0 && price <= 300) fits.push(personaItem('student', 'good', 'Sits inside most student budgets'));
+
+  // Beauty-specific price personas
+  if (isBeauty && price && price > 0) {
+    if (price <= 300) fits.push(personaItem('budget', 'high', 'Affordable everyday essential'));
+    else if (price >= 800) fits.push(personaItem('premium', 'good', 'Premium formulation for discerning buyers'));
+  }
 
   return fits;
 }

@@ -80,7 +80,7 @@ function resetBrowser() {
  * @param {object} opts  { renderWait, timeoutMs, retries, retryDelayMs }
  */
 async function renderPage(url, opts = {}) {
-  const timeoutMs = opts.timeoutMs || 12000;
+  const timeoutMs = opts.timeoutMs || 10000;
   const renderWait = opts.renderWait || null;
   const retries = opts.retries != null ? opts.retries : 1;
   const retryDelayMs = opts.retryDelayMs != null ? opts.retryDelayMs : 2000;
@@ -168,12 +168,13 @@ async function renderOnce(url, { timeoutMs, renderWait, siteId, attempt = 0 }) {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
     if (renderWait) {
       try {
-        await page.waitForSelector(renderWait, { timeout: 3000 });
+        await page.waitForSelector(renderWait, { timeout: 2500 });
       } catch { /* proceed with whatever rendered */ }
     }
-    // Give late-bound React hydration a moment — a bit longer for geo-proxied
-    // India storefronts so the window.__myx / __NEXT_DATA__ blob actually writes.
-    await page.waitForTimeout(1500);
+    // Give late-bound React hydration a moment — shorter for most stores, a bit
+    // longer for geo-proxied India storefronts so window blobs actually write.
+    const hydrationMs = isMyntra ? 1200 : 800;
+    await page.waitForTimeout(hydrationMs);
     const html = await page.content();
     const finalUrl = page.url();
     return { ok: Boolean(html && html.length > 200), html: html || '', url: finalUrl, rendered: true };

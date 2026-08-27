@@ -348,6 +348,7 @@ async function analyzeUrl({ url, prompt = null, user = null, intent = {} }) {
       ? 400
       : config.crawler.maxReviews,
     starOverride: raw.rating_breakdown || undefined,
+    productName: product.title || product.name || '',
   });
   const reviewSentiment = deriveSentiment({
     ...reviewAnalysis,

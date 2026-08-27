@@ -10,7 +10,7 @@ class GeminiProvider extends AIProviderInterface {
       const { GoogleGenerativeAI } = require('@google/generative-ai');
       if (!config.gemini.apiKey) throw new Error('Gemini API key not configured');
       const genAI = new GoogleGenerativeAI(config.gemini.apiKey);
-      this.model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      this.model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
       this.ready = true;
     } catch (e) {
       console.warn('Gemini init failed:', e.message);

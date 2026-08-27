@@ -140,9 +140,12 @@ function priceIntelligence(product, ctx = {}) {
     priceTrend = { direction: 'unknown', changePercent: null, estimate: true, note: 'No usable price history \u2014 the future trend cannot be estimated.' };
   }
 
-  const savingsOpportunity = market && market.median
-    ? (price < market.median ? market.median - price : original ? original - price : null)
-    : original ? original - price : null;
+  // Only show savings from actual MRP discount, not from category median comparison.
+  // Category median is unreliable — a ₹165 face wash compared to ₹861 median
+  // gives a fake "save ₹696" that has nothing to do with real savings.
+  const savingsOpportunity = (original && original > price && discountPercent >= 5)
+    ? original - price
+    : null;
 
   const confidence = (ctx.history && ctx.history.length >= 5) ? 70 : market ? 60 : 25;
 

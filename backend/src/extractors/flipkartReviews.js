@@ -24,7 +24,7 @@ const PER_PAGE = 30;
 const DEFAULT_SPACING_MS = parseInt(process.env.FLIPKART_SPACING_MS, 10) || 1000;
 // Minimum gap between Flipkart review API calls across the whole process.
 const GLOBAL_GAP_MS = DEFAULT_SPACING_MS;
-const MAX_PAGES = 2;
+const MAX_PAGES = 3;
 
 let lastFlipkartRequestAt = 0;
 
@@ -157,7 +157,44 @@ function pushUnique(all, seen, r) {
   return true;
 }
 
-function apiGet(productId, start, referer) {
+// ── Cookie Jar ──────────────────────────────────────────────────────────────
+// Flipkart requires session cookies (T, at) from a product page visit before
+// the review API will return 200 instead of 403.  We grab them once and reuse
+// until they expire (typically ~30 days).
+let cookieCache = { cookies: '', expiresAt: 0 };
+
+async function getFlipkartCookies() {
+  if (cookieCache.cookies && Date.now() < cookieCache.expiresAt) return cookieCache.cookies;
+  return new Promise((resolve) => {
+    const req = require('https').request(
+      {
+        hostname: 'www.flipkart.com',
+        port: 443,
+        path: '/',
+        method: 'GET',
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+          Accept: 'text/html',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        timeout: 5000,
+      },
+      (res) => {
+        const raw = res.headers['set-cookie'] || [];
+        const cookies = raw.map((c) => c.split(';')[0]).join('; ');
+        cookieCache = { cookies, expiresAt: Date.now() + 25 * 60 * 60 * 1000 };
+        resolve(cookies);
+        res.resume();
+      }
+    );
+    req.on('error', () => resolve(''));
+    req.on('timeout', () => { req.destroy(); resolve(''); });
+    req.end();
+  });
+}
+
+function apiGet(productId, start, referer, cookies) {
   return new Promise((resolve) => {
     const params = {
       productId,
@@ -170,25 +207,27 @@ function apiGet(productId, start, referer) {
     const qs = Object.entries(params)
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join('&');
+    const headers = {
+      Host: 'www.flipkart.com',
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 FKUA/website/41/website/Desktop',
+      Accept: 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      Origin: 'https://www.flipkart.com',
+      Referer: referer,
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'same-origin',
+    };
+    if (cookies) headers.Cookie = cookies;
     const req = require('https').request(
       {
         hostname: 'www.flipkart.com',
         port: 443,
         path: `/api/3/product/reviews?${qs}`,
         method: 'GET',
-        headers: {
-          Host: 'www.flipkart.com',
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 FKUA/website/41/website/Desktop',
-          Accept: 'application/json, text/plain, */*',
-          'Accept-Language': 'en-US,en;q=0.9',
-          Origin: 'https://www.flipkart.com',
-          Referer: referer,
-          'Sec-Fetch-Dest': 'empty',
-          'Sec-Fetch-Mode': 'cors',
-          'Sec-Fetch-Site': 'same-origin',
-        },
-        timeout: 3000,
+        headers,
+        timeout: 5000,
       },
       (res) => {
         let body = '';
@@ -321,12 +360,15 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
   let emptyPages = 0;
   let blockedCount = 0;
   const reviewFetchStart = Date.now();
-  const REVIEW_FETCH_TIMEOUT_MS = 4000;
+  const REVIEW_FETCH_TIMEOUT_MS = 10000;
+
+  // Grab session cookies first — required for the API to return 200.
+  const cookies = await getFlipkartCookies();
 
   for (let page = 0; page < MAX_PAGES; page++) {
     if (Date.now() - reviewFetchStart > REVIEW_FETCH_TIMEOUT_MS) break;
     if (page > 0 && spacingMs > 0) await sleep(spacingMs);
-    let res = await apiGet(productId, start, referer);
+    let res = await apiGet(productId, start, referer, cookies);
     if (res.status !== 200) {
       if (res.status === 400 || res.status === 404 || res.status === 410) {
         return { reviews: all, blocked: false };
@@ -336,10 +378,10 @@ async function fetchViaApi({ productId, url, max, spacingMs, onSpacing }) {
       // only retry a couple of times with small backoffs before bailing to
       // the HTML page copy.
       blockedCount += 1;
-      const backoffMs = Math.min(1000 * Math.pow(2, blockedCount - 1), 4000);
+      const backoffMs = Math.min(500 * Math.pow(2, blockedCount - 1), 2000);
       if (onSpacing) onSpacing(`Flipkart is rate-limiting the reviews API — backing off ${Math.round(backoffMs / 1000)}s and retrying…`);
       await sleep(backoffMs);
-      const retried = await apiGet(productId, start, referer);
+      const retried = await apiGet(productId, start, referer, cookies);
       if (retried.status === 200) {
         res = retried;
         blockedCount = Math.max(0, blockedCount - 1);
@@ -434,7 +476,7 @@ function httpGetBody(url) {
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
         },
-        timeout: 3000,
+        timeout: 5000,
       },
       (res) => {
         let body = '';

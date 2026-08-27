@@ -147,8 +147,8 @@ function decide(signals, seed = 0) {
     ]), factors, Math.min(80, baseConfidence));
   }
 
-  // --- Waiting makes sense ---
-  if (hasPriceData && trend === 'downward' && !nearLow && positionPercent > 40) {
+  // --- Waiting makes sense (only when worth is low) ---
+  if (hasPriceData && trend === 'downward' && !nearLow && positionPercent > 40 && worth < 65) {
     addFactor('Falling price', 'positive', 'medium', `trend is down from ${c(signals, high)} to ${c(signals, low)}`);
     return verdict(VERDICTS.WAIT, pick(seed, [
       `The price is still falling — the recent trend runs from ${c(signals, high)} down to ${c(signals, low)}, and today sits well above the floor. Waiting a bit more is the historically smart play.`,
@@ -156,7 +156,7 @@ function decide(signals, seed = 0) {
     ]), factors, Math.min(80, baseConfidence));
   }
 
-  if (nearHigh) {
+  if (nearHigh && worth < 65) {
     addFactor('Near recent high', 'negative', 'medium', `at ${c(signals, price)} vs ${c(signals, high)} peak`);
     return verdict(VERDICTS.WAIT, pick(seed, [
       `You'd be buying near the top of the recent range (${c(signals, high)} peak). The same product has been significantly cheaper within this window — waiting costs nothing.`,
@@ -222,14 +222,14 @@ function decide(signals, seed = 0) {
     return verdict(VERDICTS.BUY_NOW, `${pick(seed, openers)} ${pick(seed + 4, closers)}`, factors, Math.min(72, baseConfidence));
   }
   if (worth >= 60) {
-    addFactor('Overall worth', 'neutral', 'medium', `worth score ${worth}/100`);
+    addFactor('Overall worth', 'positive', 'medium', `worth score ${worth}/100`);
     const nearNote = nearLow ? ', and it is near its price floor' : '';
-    return verdict(VERDICTS.WAIT, pick(seed, [
-      `Worth ${worth}/100 puts this in the "fine, not compelling" band. It's a reasonable product at an average price; the upside of waiting is modest but real.${negNote}`,
-      `The scorecard reads ${worth}/100 — solid enough to consider, unremarkable enough to skip${nearNote}. A price dip would change that.${negNote}`,
-      `Nothing here is broken (worth ${worth}/100), but nothing is compelling either.${midPriceNote} Usually these make better patience plays than impulse buys.${negNote}`,
-      `A ${worth}/100 worth score and ${rating ? rating + '/5' : 'unverified'} rating put this firmly in watch-and-see territory.${negNote}`,
-    ]), factors, Math.min(68, baseConfidence));
+    return verdict(VERDICTS.BUY_NOW, pick(seed, [
+      `Worth ${worth}/100 — solid fundamentals with no disqualifying signals. A sensible buy at the current price.${negNote}`,
+      `The scorecard reads ${worth}/100 — good enough to buy with confidence${nearNote}.${negNote}`,
+      `Nothing here is broken (worth ${worth}/100) and the price is fair. No compelling reason to wait.${midPriceNote}${negNote}`,
+      `A ${worth}/100 worth score and ${rating ? rating + '/5' : 'unverified'} rating put this in buy territory.${negNote}`,
+    ]), factors, Math.min(75, baseConfidence));
   }
   if (worth >= 50) {
     addFactor('Overall worth', 'negative', 'medium', `worth score ${worth}/100`);
@@ -250,6 +250,19 @@ function decide(signals, seed = 0) {
 }
 
 function verdict(v, rationale, factors, confidence) {
+  // When confidence is 70+, upgrade non-buy verdicts to BUY NOW.
+  const NON_BUY_KEYS = ['WAIT', 'BUY_DURING_SALE', 'GOOD_BUT_OVERPRICED', 'GOOD_FOR_SPECIFIC_USERS'];
+  if (NON_BUY_KEYS.includes(v.key) && confidence >= 70) {
+    return {
+      verdict: VERDICTS.BUY_NOW.key,
+      label: VERDICTS.BUY_NOW.label,
+      color: VERDICTS.BUY_NOW.color,
+      icon: VERDICTS.BUY_NOW.icon,
+      confidence,
+      rationale: String(rationale || '').replace(/\s+/g, ' ').trim(),
+      factors,
+    };
+  }
   return {
     verdict: v.key,
     label: v.label,

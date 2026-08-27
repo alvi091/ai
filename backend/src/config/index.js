@@ -89,6 +89,16 @@ module.exports = {
     rapidApiHost: process.env.RAPIDAPI_HOST || 'real-time-amazon-data.p.rapidapi.com',
     country: process.env.AMAZON_COUNTRY || 'US',
   },
+  webUnlocker: {
+    key: process.env.WEB_UNLOCKER_KEY || '',
+    zone: process.env.WEB_UNLOCKER_ZONE || 'unlocker1',
+    enabled: Boolean(process.env.WEB_UNLOCKER_KEY),
+  },
+  serpApi: {
+    key: process.env.SERP_API_KEY || '',
+    zone: process.env.SERP_API_ZONE || 'serp_api1',
+    enabled: Boolean(process.env.SERP_API_KEY),
+  },
   cors: {
     origin: corsOrigin.length === 1 ? corsOrigin[0] : corsOrigin,
   },

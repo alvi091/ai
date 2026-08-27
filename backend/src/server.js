@@ -20,6 +20,9 @@ const dashboardRoutes = require('./routes/dashboard');
 const adminRoutes = require('./routes/admin');
 const amazonRoutes = require('./routes/amazon');
 const analyzeRoutes = require('./routes/analyze');
+const chatRoutes = require('./routes/chat');
+const marketplaceRoutes = require('./routes/marketplace');
+const researchRoutes = require('./routes/research');
 
 const app = express();
 
@@ -62,7 +65,22 @@ if (config.nodeEnv === 'production') {
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const health = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: Math.round(process.uptime()),
+    memory: {
+      heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+      rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
+    },
+    version: process.env.npm_package_version || '1.0.0',
+  };
+  if (req.query.detailed === 'true') {
+    health.env = process.env.NODE_ENV || 'development';
+    health.pid = process.pid;
+  }
+  res.json(health);
 });
 
 app.use('/api/auth', authRoutes);
@@ -77,6 +95,9 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/amazon', amazonRoutes);
 app.use('/api/analyze', analyzeRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/research', researchRoutes);
 
 // Serve the built frontend (same-origin deployment) if it exists
 const distDir = path.join(__dirname, '..', '..', 'frontend', 'dist');

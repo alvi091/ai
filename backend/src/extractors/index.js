@@ -191,10 +191,31 @@ async function extractProductFromUrl(rawUrl, onProgress) {
   // that return far richer data than the generic DOM scraper). Only stores
   // without a dedicated fetcher fall through to the generic review scrape.
   if (v.site.id === 'flipkart') {
-    // Flipkart review API is blocked from this server — use embedded reviews
-    // from the product page shell (JSON-LD + DOM extraction).
-    // This saves ~8s vs. trying the dead API + HTML fallback.
-    step('Reading Flipkart reviews');
+    // Try the Flipkart review API (works with Web Unlocker/residential proxy).
+    // Falls back to embedded reviews if API is blocked.
+    step('Fetching Flipkart reviews via API');
+    try {
+      const pid = extractProductId(v.url, html);
+      if (pid) {
+        const fk = await fetchFlipkartReviews({
+          productId: pid,
+          url: v.url,
+          max: config.crawler.flipkartReviews,
+          spacingMs: DEFAULT_SPACING_MS,
+          onSpacing: (m) => step(m),
+        });
+        if (fk && fk.length) {
+          reviews = dedupeReviews([...fk, ...baseReviews]);
+          if (config.crawler.flipkartReviews > 0 && reviews.length > config.crawler.flipkartReviews) {
+            reviews = reviews.slice(0, config.crawler.flipkartReviews);
+          }
+          step(`Got ${reviews.length} Flipkart reviews`);
+        }
+      }
+    } catch (e) {
+      console.warn('[extract] Flipkart API unavailable, using embedded reviews:', e.message);
+      step('Using embedded Flipkart reviews');
+    }
   } else if (v.site.id === 'myntra') {
     // Myntra server-renders only a handful of "top" reviews — pull every
     // comment through their reviews API (paginated; falls back to the embedded

@@ -575,9 +575,17 @@ async function generateReport(analytics, context = {}) {
     llmReport = await ai.generateProductReport(analytics, context);
   } catch { llmReport = null; }
 
+  // If Gemini returned a report but with empty verdict key, fall back to deterministic decide()
+  if (llmReport && llmReport.verdict && !llmReport.verdict.key && Array.isArray(llmReport.sections)) {
+    llmReport = null;
+  }
+
   if (llmReport && llmReport.verdict && Array.isArray(llmReport.sections)) {
+    // Always use the deterministic verdict — Gemini sometimes guesses wrong
+    const detReport = buildReport(analytics, context);
     return {
       ...llmReport,
+      verdict: detReport.verdict,
       priceHistory: (analytics.price && analytics.price.priceHistory) || [],
       priceCurrent: (analytics.price && analytics.price.current) || null,
       currency: analytics.product.currency,
