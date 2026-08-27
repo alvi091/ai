@@ -569,30 +569,28 @@ function buildReport(analytics, { user = null, intent = {}, prompt = '', alterna
 }
 
 async function generateReport(analytics, context = {}) {
+  // Always use deterministic verdict — Gemini sometimes guesses wrong
+  const detReport = buildReport(analytics, context);
+
   let llmReport = null;
   try {
     const ai = AIService.create('gemini');
     llmReport = await ai.generateProductReport(analytics, context);
   } catch { llmReport = null; }
 
-  // If Gemini returned a report but with empty verdict key, fall back to deterministic decide()
-  if (llmReport && llmReport.verdict && !llmReport.verdict.key && Array.isArray(llmReport.sections)) {
-    llmReport = null;
-  }
-
-  if (llmReport && llmReport.verdict && Array.isArray(llmReport.sections)) {
-    // Always use the deterministic verdict — Gemini sometimes guesses wrong
-    const detReport = buildReport(analytics, context);
+  // If Gemini returned sections, use them for richer content but keep our verdict
+  if (llmReport && Array.isArray(llmReport.sections) && llmReport.sections.length > 0) {
     return {
       ...llmReport,
       verdict: detReport.verdict,
+      summary: detReport.summary,
       priceHistory: (analytics.price && analytics.price.priceHistory) || [],
       priceCurrent: (analytics.price && analytics.price.current) || null,
       currency: analytics.product.currency,
-      meta: { ...(llmReport.meta || {}), engine: 'llm-decision-engine', generatedAt: new Date().toISOString() },
+      meta: { ...(llmReport.meta || {}), engine: 'deterministic-verdict', generatedAt: new Date().toISOString() },
     };
   }
-  return buildReport(analytics, context);
+  return detReport;
 }
 
 module.exports = { buildReport, generateReport };
