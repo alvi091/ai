@@ -117,6 +117,9 @@ export default function SearchResults() {
           examples={status === 'idle' ? EXAMPLES : []}
           submitting={status === 'thinking'}
         />
+        <p className="mt-3 text-[12px] text-surface-500 text-center">
+          Currently supports: Amazon, Flipkart
+        </p>
       </motion.div>
 
       <AnimatePresence mode="wait">

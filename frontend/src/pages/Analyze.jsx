@@ -28,8 +28,8 @@ const STEPS = [
   'Assembling your decision report',
 ];
 
-const PLACEHOLDER = 'Paste any product URL — Amazon, Flipkart, Myntra, Meesho, AJIO…';
-const SUPPORTED = ['Amazon', 'Flipkart', 'Myntra', 'Meesho', 'AJIO'];
+const PLACEHOLDER = 'Paste any product URL — Amazon or Flipkart...';
+const SUPPORTED = ['Amazon', 'Flipkart'];
 
 export default function Analyze() {
   const [url, setUrl] = useState('');
@@ -129,9 +129,11 @@ export default function Analyze() {
         setErrorKind(payload?.kind || null);
         setError(payload?.error || 'Could not analyze that link.');
         setPhase('error');
+        setUrl('');
       } else {
         setData(payload);
         setPhase('done');
+        setUrl('');
         startBackgroundResearch(payload);
       }
     } catch (err) {
@@ -411,7 +413,7 @@ export default function Analyze() {
         </AnimatePresence>
       </div>
 
-      {phase === 'done' && data && <ProductChat analysis={data} />}
+      {/* {phase === 'done' && data && <ProductChat analysis={data} />} */}
     </div>
   );
 }

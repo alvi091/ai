@@ -20,7 +20,7 @@
 const config = require('../config');
 
 const UNLOCKER_API = 'https://api.brightdata.com/request';
-const DEFAULT_TIMEOUT = 25000;
+const DEFAULT_TIMEOUT = 45000;
 
 /**
  * Fetch a URL via Bright Data Web Unlocker.
@@ -47,14 +47,8 @@ async function fetchViaUnlocker(url, opts = {}) {
   const body = {
     url,
     zone,
-    mode: opts.mode || 'auto',
-    enable_solver: opts.enableSolver !== false,
-    output_format: opts.outputFormat || 'html',
+    format: 'raw',
   };
-
-  if (opts.proxy) body.proxy = opts.proxy;
-  if (opts.jsWaitSelector) body.js_wait_selector = opts.jsWaitSelector;
-  if (opts.jsWaitTimeout) body.js_wait_timeout = opts.jsWaitTimeout;
 
   try {
     const controller = new AbortController();
@@ -77,13 +71,19 @@ async function fetchViaUnlocker(url, opts = {}) {
       return { ok: false, html: '', url, status: res.status, error: `Unlocker ${res.status}: ${errBody.slice(0, 200)}` };
     }
 
-    const data = await res.json();
-    const html = data.data?.content || data.content || data.html || '';
+    const contentType = res.headers.get('content-type') || '';
+    let html;
+    if (contentType.includes('json')) {
+      const data = await res.json();
+      html = data.data?.content || data.content || data.html || '';
+    } else {
+      html = await res.text();
+    }
 
     return {
       ok: Boolean(html && html.length > 200),
       html,
-      url: data.data?.url || url,
+      url,
       status: 200,
     };
   } catch (err) {

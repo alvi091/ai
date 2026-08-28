@@ -2,28 +2,22 @@
  * Marketplace Comparison service — searches for the same product across
  * supported marketplaces and returns price/rating/availability comparisons.
  *
- * Uses Web Unlocker for Flipkart/Myntra/Meesho/AJIO search pages,
+ * Uses Web Unlocker for Flipkart search pages,
  * Amazon RapidAPI for Amazon, and Cheerio to parse results.
  */
 
 const { STORES } = require('../extractors/websiteRegistry');
 const config = require('../config');
 
-const SUPPORTED_MARKETPLACES = ['amazon', 'flipkart', 'myntra', 'meesho', 'ajio'];
+const SUPPORTED_MARKETPLACES = ['amazon', 'flipkart'];
 
 const MARKETPLACE_SEARCH_URLS = {
   flipkart: (q) => `https://www.flipkart.com/search?q=${encodeURIComponent(q)}`,
-  myntra: (q) => `https://www.myntra.com/${encodeURIComponent(q)}`,
-  meesho: (q) => `https://www.meesho.com/search?q=${encodeURIComponent(q)}`,
-  ajio: (q) => `https://www.ajio.com/search/?text=${encodeURIComponent(q)}`,
 };
 
 const MARKETPLACE_DOMAINS = {
   amazon: 'amazon.in',
   flipkart: 'flipkart.com',
-  myntra: 'myntra.com',
-  meesho: 'meesho.com',
-  ajio: 'ajio.com',
 };
 
 /**

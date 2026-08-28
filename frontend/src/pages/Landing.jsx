@@ -1,91 +1,42 @@
-import { useNavigate, Link } from 'react-router-dom';
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { useState, useCallback, useRef } from 'react';
+import { motion, useMotionValue, useSpring, AnimatePresence } from 'framer-motion';
 import {
-  Brain, TrendingDown, ShieldCheck, Sparkles, ArrowRight, Heart, GitCompare,
-  Clock, Target, Gauge, Layers, Wand2, Menu, X,
+  Brain, Sparkles, ArrowRight, ShieldCheck, Wand2, Menu, X,
 } from 'lucide-react';
-import AiSearchBar from '../components/ui/AiSearchBar';
 import Logo from '../components/ui/Logo';
 import PublicFooter from '../components/layout/PublicFooter';
 import SectionLabel from '../components/ui/SectionLabel';
-import InsightCard from '../components/ui/InsightCard';
-import MarketplaceBrowse from '../components/ui/MarketplaceBrowse';
-import { fadeUp, fadeUpSm, stagger } from '../lib/motion';
-import { useTypewriter, useMounted } from '../lib/hooks';
-
-const EXAMPLES = [
-
-  'Laptop for programming & travel, light, under ₹80,000',
-  'Winter jacket for Delhi, waterproof, under ₹5,000',
-];
-
-const TYPING_PROMPTS = [
-  '“best value 4K monitor for photo editing under ₹30,000”',
-  '“noise-cancelling earbuds with good mic for calls”',
-  '“lightweight backpack for daily office commute”',
-];
+import { fadeUp, stagger } from '../lib/motion';
 
 const STEPS = [
-  { icon: Wand2, title: 'Describe', desc: 'Say what you need in plain language. Budget, use case, constraints — the AI parses it all.' },
-  { icon: Brain, title: 'Analyze', desc: 'Thousands of product signals are scored: reviews, price history, durability, timing, and your profile.' },
-  { icon: Target, title: 'Decide', desc: 'A clear verdict with confidence. Buy now, wait, or avoid — with the reasoning exposed, not hidden.' },
-  { icon: ShieldCheck, title: 'Buy', desc: 'Act on a decision backed by evidence. Every recommendation explains why, and what could go wrong.' },
-];
-
-const FEATURES = [
-  { icon: Brain, title: 'AI Decision Engine', desc: 'Not a search index. An engine that reasons about suitability, value, and timing before recommending anything.' },
-  { icon: Gauge, title: 'Worth Scores', desc: 'Every product gets a transparent 0–100 worth score built from reviews, price fairness, risk, and durability.' },
-  { icon: TrendingDown, title: 'Price Intelligence', desc: 'Historical trends, fair-price estimates, and future predictions so you never buy at the top.' },
-  { icon: Heart, title: 'Shopping Memory', desc: 'Ayymus remembers your budget, style, and preferences to personalize every single decision.' },
-  { icon: GitCompare, title: 'Intelligent Comparison', desc: 'Radar-grade attribute comparison with a clear AI verdict — no spreadsheet tables.' },
-  { icon: Clock, title: 'Timing Advice', desc: 'Know when to pull the trigger and when to wait. Buying windows matter, and the AI tracks them.' },
+  { icon: Wand2, title: 'Paste', desc: 'Paste any product URL from Amazon, Flipkart, or Myntra.' },
+  { icon: Brain, title: 'Analyze', desc: 'AI reads reviews, price history, and product signals in seconds.' },
+  { icon: ShieldCheck, title: 'Decide', desc: 'Get a clear buy, wait, or avoid verdict with full reasoning.' },
 ];
 
 export default function Landing() {
   const navigate = useNavigate();
-  const mounted = useMounted();
-  const [query, setQuery] = useState('');
-  const [promptIndex, setPromptIndex] = useState(0);
-  const { output, done } = useTypewriter(TYPING_PROMPTS[promptIndex], {
-    speed: 34,
-    startDelay: 900,
-    enabled: mounted && !query,
-  });
+  const [url, setUrl] = useState('');
 
-  useEffect(() => {
-    if (!done) return;
-    const t = setTimeout(() => {
-      setPromptIndex((i) => (i + 1) % TYPING_PROMPTS.length);
-    }, 2600);
-    return () => clearTimeout(t);
-  }, [done]);
-
-  const handleSearch = useCallback(
-    (value) => {
-      const q = (value || query).trim();
+  const handleSubmit = useCallback(
+    (e) => {
+      e.preventDefault();
+      const q = url.trim();
       if (!q) return;
-      const isUrl =
-        /^https?:\/\//i.test(q) ||
-        /^www\./i.test(q) ||
-        (q.includes('.') && !q.includes(' '));
-      if (isUrl) {
-        navigate(`/analyze?url=${encodeURIComponent(q)}`);
-        return;
-      }
-      navigate(`/search?q=${encodeURIComponent(q)}`);
+      navigate(`/analyze?url=${encodeURIComponent(q)}`);
     },
-    [navigate, query]
+    [navigate, url]
   );
 
   const goAnalyze = useCallback(() => navigate('/analyze'), [navigate]);
 
   return (
     <div className="min-h-screen bg-surface-50 overflow-x-hidden">
-      <PublicHeader onSearch={() => handleSearch()} onAnalyze={goAnalyze} />
+      <PublicHeader onAnalyze={goAnalyze} />
 
       {/* ============ HERO ============ */}
-      <section className="relative flex min-h-screen items-center pt-24 pb-20 sm:pb-24">  
+      <section className="relative flex min-h-screen items-center pt-24 pb-20 sm:pb-24">
         <HeroCursorGlow />
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute inset-0 glow-teal" />
@@ -94,7 +45,7 @@ export default function Landing() {
         </div>
 
         <div className="relative shell text-center">
-          {/* <motion.div
+          <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
@@ -104,8 +55,8 @@ export default function Landing() {
               <span className="absolute inline-flex w-full h-full rounded-full bg-primary-500 opacity-60 animate-ping" />
               <span className="relative inline-flex w-2 h-2 rounded-full bg-primary-400" />
             </span>
-            The AI Buying Agent
-          </motion.div> */}
+            AI Product Research
+          </motion.div>
 
           <motion.h1
             initial={{ opacity: 0, y: 22 }}
@@ -113,128 +64,62 @@ export default function Landing() {
             transition={{ duration: 0.7, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
             className="text-[44px] leading-[1.04] sm:text-[64px] lg:text-[84px] font-semibold tracking-[-0.045em] text-white"
           >
-            Shop Smarter.
-            <br />
-            <span className="text-teal-gradient">Buy Better.</span>
+            Should I buy this?
           </motion.h1>
 
-          {/* <motion.p
+          <motion.p
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
             className="mx-auto mt-6 max-w-2xl text-[17px] sm:text-lg leading-relaxed text-surface-500"
           >
-            Ayymus isn't a store. It's an AI decision engine that analyzes thousands of product signals,
-            reasons through the tradeoffs, and tells you exactly what to buy — and when.
-          </motion.p> */}
+            Paste a product link and get a complete buying decision — reviews, price analysis, alternatives, and a clear verdict.
+          </motion.p>
 
-          {/* Floating intelligence cards */}
-          <div className="relative">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ delay: 0.7, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              className="hidden lg:block absolute -left-8 top-6 z-20"
-            >
-              <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }} className="w-44 rounded-3xl border border-surface-300 bg-surface-100/95 shadow-soft p-4 text-left">
-                <p className="text-[10px] text-surface-500 font-medium uppercase tracking-[0.12em]">Worth Score</p>
-                <p className="mt-1 text-[26px] font-semibold tracking-tight text-white">92<span className="text-[13px] text-surface-500">/100</span></p>
-                <div className="mt-2 h-1.5 rounded-full bg-surface-300 overflow-hidden">
-                  <motion.div className="h-full bg-success rounded-full" initial={{ width: 0 }} animate={{ width: '92%' }} transition={{ delay: 1.2, duration: 1 }} />
-                </div>
-                <p className="mt-2 text-[11px] text-success">Excellent value</p>
-              </motion.div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ delay: 0.85, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              className="hidden lg:block absolute -right-6 top-2 z-20"
-            >
-              <motion.div animate={{ y: [0, 10, 0] }} transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 0.8 }} className="w-48 rounded-3xl border border-surface-300 bg-surface-100/95 shadow-soft p-4 text-left">
-                <p className="text-[10px] text-surface-500 font-medium uppercase tracking-[0.12em]">Price Trend</p>
-                <p className="mt-1 text-[24px] font-semibold tracking-tight text-success">-12.4%</p>
-                <p className="text-[11px] text-surface-500">vs 45-day average</p>
-                <div className="mt-2 flex items-end gap-1 h-8">
-                  {[42, 38, 45, 34, 30, 26, 22, 16, 12, 9].map((h, i) => (
-                    <motion.span key={i} className="flex-1 rounded-sm bg-primary-600/60" initial={{ height: 0 }} animate={{ height: `${h}%` }} transition={{ delay: 1.3 + i * 0.05, duration: 0.4 }} />
-                  ))}
-                </div>
-              </motion.div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ delay: 1, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              className="hidden lg:block absolute -left-4 -bottom-16 z-20"
-            >
-              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: 1.6 }} className="w-40 rounded-3xl border border-surface-300 bg-surface-100/95 shadow-soft p-4 text-left">
-                <p className="text-[10px] text-surface-500 font-medium uppercase tracking-[0.12em]">Confidence</p>
-                <p className="mt-1 text-[26px] font-semibold tracking-tight text-white">88%</p>
-                <div className="mt-2 flex items-center justify-center w-10 h-10 rounded-full border-2 border-primary-600/30">
-                  <span className="w-6 h-6 rounded-full bg-primary-600/20" />
-                </div>
-              </motion.div>
-            </motion.div>
-
-            {/* AI Search */}
-            <div className="mx-auto mt-12 max-w-2xl">
-              <AiSearchBar
-                value={query}
-                onChange={setQuery}
-                onSubmit={handleSearch}
-                placeholder="Paste any supported product URL "
-                examples={EXAMPLES}
-                className="text-left"
+          {/* URL Input */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            className="mx-auto mt-10 max-w-2xl"
+          >
+            <form onSubmit={handleSubmit} className="relative">
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="Paste Amazon or Flipkart product URL..."
+                className="w-full h-14 pl-5 pr-36 rounded-2xl border border-surface-300 bg-surface-100/95 text-[15px] text-white placeholder:text-surface-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/30 transition-all"
               />
-
-              <div className="mt-4 flex items-center justify-center gap-3 text-[13px] text-surface-500 min-h-[24px]">
-                {!query && (
-                  <span className="font-mono">
-                    <span className="text-primary-400">{output}</span>
-                    <span className="inline-block w-[7px] h-4 bg-primary-400/80 ml-0.5 animate-cursor-blink align-middle" />
-                  </span> 
-                )}
-              </div>
-
-              
-
-              
-            </div>
-          </div>
+              <button
+                type="submit"
+                className="absolute right-2 top-2 bottom-2 flex items-center gap-2 px-5 rounded-xl bg-primary-600 text-white text-[14px] font-semibold hover:bg-primary-500 transition-colors"
+              >
+                Analyze
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+            <p className="mt-4 text-[13px] text-surface-500">
+              Currently supports: Amazon, Flipkart
+            </p>
+          </motion.div>
         </div>
       </section>
-
-      {/* ============ SIGNAL STRIP ============ */}
-      <section className="border-y border-surface-300 bg-surface-100/50">
-        <div className="shell py-8">
-          <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-[13px] font-medium text-surface-500">
-            <span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary-500" /> Interprets intent</span>
-            <span className="flex items-center gap-2"><Brain className="w-4 h-4 text-primary-500" /> Reasons before it recommends</span>
-            <span className="flex items-center gap-2"><Gauge className="w-4 h-4 text-primary-500" /> Transparent scores</span>
-          </div>
-        </div>
-      </section>
-
-                 {/* ============ BROWSE MARKETPLACE ============ */}
-      {/* <MarketplaceBrowse /> */}
 
       {/* ============ HOW IT WORKS ============ */}
       <section id="how" className="py-24 sm:py-32 scroll-mt-24">
         <div className="shell">
-          <motion.div variants={stagger(0.08)} initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }} className="max-w-2xl">
+          <motion.div variants={stagger(0.08)} initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }} className="text-center max-w-2xl mx-auto">
             <motion.div variants={fadeUp}><SectionLabel>How it works</SectionLabel></motion.div>
             <motion.h2 variants={fadeUp} className="mt-3 text-[32px] sm:text-[44px] font-semibold tracking-[-0.035em] text-white">
-              From question to confident decision in four moves.
+              Paste. Analyze. Decide.
             </motion.h2>
             <motion.p variants={fadeUp} className="mt-4 text-[16px] text-surface-500 leading-relaxed">
-              Everything is transparent. You can see the reasoning, the data, and the tradeoffs behind every call.
+              Three steps to a confident buying decision — no browsing required.
             </motion.p>
           </motion.div>
 
-          <div className="mt-14 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="mt-14 grid sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
             {STEPS.map((step, i) => (
               <motion.div
                 key={step.title}
@@ -242,12 +127,12 @@ export default function Landing() {
                 initial="hidden"
                 whileInView="show"
                 viewport={{ once: true, margin: '-60px' }}
-                className="card card-pad relative overflow-hidden"
+                className="card card-pad relative overflow-hidden text-center"
               >
                 <span className="absolute top-6 right-6 text-[40px] font-semibold tracking-tighter text-surface-300/40 select-none">
                   {String(i + 1).padStart(2, '0')}
                 </span>
-                <span className="flex items-center justify-center w-12 h-12 rounded-2xl bg-primary-600/12 border border-primary-600/25">
+                <span className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary-600/12 border border-primary-600/25">
                   <step.icon className="w-5 h-5 text-primary-400" />
                 </span>
                 <h3 className="mt-5 text-[17px] font-semibold text-white">{step.title}</h3>
@@ -258,31 +143,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ FEATURES ============ */}
-      {/* <section id="features" className="py-24 sm:py-32 bg-surface-100/50 border-y border-surface-300/60 scroll-mt-24">
-        <div className="shell">
-          <motion.div variants={stagger(0.08)} initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }} className="max-w-2xl">
-            <motion.div variants={fadeUp}><SectionLabel>The intelligence stack</SectionLabel></motion.div>
-            <motion.h2 variants={fadeUp} className="mt-3 text-[32px] sm:text-[44px] font-semibold tracking-[-0.035em] text-white">
-              Built for decisions, not browsing.
-            </motion.h2>
-          </motion.div>
-
-          <div className="mt-14 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {FEATURES.map((f, i) => (
-              <motion.div key={f.title} variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true, margin: '-60px' }} transition={{ delay: (i % 3) * 0.06 }}>
-                <InsightCard icon={f.icon} title={f.title}>
-                  <p>{f.desc}</p>
-                </InsightCard>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section> */}
-
-
       {/* ============ DECISION SHOWCASE ============ */}
-      <section className="py-24 sm:py-32">
+      <section className="py-24 sm:py-32 bg-surface-100/30 border-y border-surface-300/60">
         <div className="shell">
           <motion.div variants={stagger(0.08)} initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }} className="text-center max-w-2xl mx-auto">
             <motion.div variants={fadeUp}><SectionLabel>The decision, explained</SectionLabel></motion.div>
@@ -290,7 +152,7 @@ export default function Landing() {
               Not just a recommendation. A reasoning.
             </motion.h2>
             <motion.p variants={fadeUp} className="mt-4 text-[16px] text-surface-500 leading-relaxed">
-              Every verdict shows its confidence, its drivers, and its risks. This is what makes Ayymus an AI decision platform.
+              Every verdict shows its confidence, its drivers, and its risks.
             </motion.p>
           </motion.div>
 
@@ -348,10 +210,8 @@ export default function Landing() {
         </div>
       </section>
 
- 
-
       {/* ============ CTA ============ */}
-      <section className="pb-28">
+      <section className="py-24 sm:py-32">
         <div className="shell">
           <motion.div
             variants={fadeUp}
@@ -363,19 +223,16 @@ export default function Landing() {
             <div className="absolute inset-0 glow-teal pointer-events-none" />
             <div className="relative">
               <h2 className="text-[30px] sm:text-[40px] font-semibold tracking-[-0.035em] text-white">
-                Ready for your next decision?
+                Ready to decide?
               </h2>
               <p className="mx-auto mt-3 max-w-lg text-[15px] text-surface-500 leading-relaxed">
-                Describe what you need and get a complete, evidence-backed buying decision in seconds — or paste the link of a product you're already eyeing.
+                Paste a product link and get a complete, evidence-backed buying decision in seconds.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <button onClick={goAnalyze} className="btn-primary">
                   <Wand2 className="w-4 h-4" />
-                  Analyze any product URL
+                  Analyze a product
                   <ArrowRight className="w-4 h-4" />
-                </button>
-                <button onClick={() => handleSearch()} className="btn-secondary">
-                  Start an intelligent search
                 </button>
                 <button onClick={() => navigate('/signup')} className="btn-secondary">
                   Create a free account
@@ -429,7 +286,7 @@ function HeroCursorGlow() {
   );
 }
 
-function PublicHeader({ onSearch, onAnalyze }) {
+function PublicHeader({ onAnalyze }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -452,11 +309,9 @@ function PublicHeader({ onSearch, onAnalyze }) {
             <button onClick={() => scrollTo('how')} className="px-4 py-2 rounded-xl text-[13px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all">
               How it works
             </button>
-            
             <button onClick={onAnalyze} className="px-4 py-2 rounded-xl text-[13px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all">
-              Analyze link
+              Analyze
             </button>
-           
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => navigate('/login')} className="hidden sm:inline-flex px-4 py-2 rounded-xl text-[13px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all">
@@ -486,30 +341,17 @@ function PublicHeader({ onSearch, onAnalyze }) {
               className="md:hidden mt-2 rounded-2xl border border-surface-300 bg-surface-100/95 backdrop-blur-xl overflow-hidden shadow-lift"
             >
               <div className="p-2 flex flex-col">
-                {[
-                  { label: 'How it works', id: 'how' },
-                  { label: 'Intelligence', id: 'features' },
-                  { label: 'Marketplace', id: 'marketplace' },
-                ].map(({ label, id }) => (
-                  <button
-                    key={id}
-                    onClick={() => scrollTo(id)}
-                    className="px-4 py-3 rounded-xl text-left text-[14px] font-medium text-surface-700 hover:text-white hover:bg-surface-200 transition-all"
-                  >
-                    {label}
-                  </button>
-                ))}
+                <button
+                  onClick={() => scrollTo('how')}
+                  className="px-4 py-3 rounded-xl text-left text-[14px] font-medium text-surface-700 hover:text-white hover:bg-surface-200 transition-all"
+                >
+                  How it works
+                </button>
                 <button
                   onClick={() => { setMenuOpen(false); onAnalyze(); }}
                   className="px-4 py-3 rounded-xl text-left text-[14px] font-medium text-primary-400 hover:bg-surface-200 transition-all"
                 >
-                  Analyze a product URL
-                </button>
-                <button
-                  onClick={() => { setMenuOpen(false); onSearch(); }}
-                  className="px-4 py-3 rounded-xl text-left text-[14px] font-medium text-primary-400 hover:bg-surface-200 transition-all"
-                >
-                  Try it
+                  Analyze a product
                 </button>
                 <div className="mt-1 pt-2 border-t border-surface-300 flex items-center gap-2">
                   <button

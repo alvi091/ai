@@ -105,7 +105,7 @@ function detectSourceType(url, domain) {
   const d = String(domain || url || '').toLowerCase();
   if (/reddit\.com|quora\.com|stackoverflow\.com|forum|discourse|stackexchange/.test(d)) return 'community';
   if (/youtube\.com|youtu\.be|vimeo/.test(d)) return 'review';
-  const MARKETPLACE_LIST = ['amazon','flipkart','myntra','meesho','ajio','croma','reliance','tatacliq','jiomart','zepto','blinkit','instamart','swiggy','bigbasket','nykaa','lenskart','boat-lifestyle','jbl','sony.com','samsung.com','apple.com','google.com','oneplus','realme','xiaomi','oppo','vivo','honor','huawei','nokia.com','motorola.com','icici','paytm','phonepe','googlepay','cred'];
+  const MARKETPLACE_LIST = ['amazon','flipkart'];
   if (MARKETPLACE_LIST.some((m) => d.includes(m))) return 'marketplace';
   if (/wikipedia\.org|official|manufacturer|\.gov|\.edu/.test(d)) return 'brand';
   const NEWS_LIST = ['techcrunch','theverge','engadget','gsmarena','notebookcheck','pcmag','wired.com','arstechnica','venturebeat','androidauthority','androidcentral','9to5google','9to5mac','tomsguide','tomshardware','digitaltrends','mashable','ndtv.com','gadgets360','91mobiles','smartprix','pricebaba','cashify','mysmartprice'];

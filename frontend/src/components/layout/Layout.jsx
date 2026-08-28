@@ -17,14 +17,7 @@ const NAV = [
       { to: '/search', icon: Sparkles, label: 'AI Search' },
     ],
   },
-  {
-    group: 'Collections',
-    items: [
-      { to: '/wishlist', icon: Heart, label: 'Wishlist' },
-      { to: '/compare', icon: GitCompare, label: 'Compare' },
-      { to: '/history', icon: History, label: 'History' },
-    ],
-  },
+  
   {
     group: 'Account',
     items: [
@@ -188,61 +181,56 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-surface-50">
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex fixed top-0 left-0 bottom-0 w-[272px] z-40 border-r border-surface-300 bg-surface-50">
-        {sidebar}
-      </aside>
-
-      {/* Mobile sidebar */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
-              onClick={() => setSidebarOpen(false)}
-            />
-            <motion.aside
-              initial={{ x: -300 }}
-              animate={{ x: 0 }}
-              exit={{ x: -300 }}
-              transition={{ type: 'spring', stiffness: 320, damping: 34 }}
-              className="fixed top-0 left-0 bottom-0 w-[280px] z-50 bg-surface-50 border-r border-surface-300 lg:hidden"
-            >
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="absolute top-5 right-4 flex items-center justify-center w-9 h-9 rounded-xl text-surface-500 hover:bg-surface-200"
-                aria-label="Close menu"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              {sidebar}
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Main column */}
-      <div className="lg:pl-[272px]">
+      {/* Main column - no sidebar */}
+      <div>
         <header className="sticky top-0 z-30 bg-surface-50/85 backdrop-blur-xl border-b border-surface-300/70">
           <div className="flex items-center gap-3 px-4 sm:px-8 h-16">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden flex items-center justify-center w-10 h-10 rounded-xl text-surface-500 hover:bg-surface-200"
-              aria-label="Open menu"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+            <Logo size={24} />
 
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] text-surface-500 hidden sm:block">
-                <span className="font-medium text-surface-700">Ayymus</span>
-                <span className="mx-2 text-surface-500">/</span>
-                {navLabel(location.pathname)}
-              </p>
-            </div>
+            <nav className="hidden md:flex items-center gap-1 ml-4">
+              <NavLink
+                to="/analyze"
+                className={({ isActive }) =>
+                  `px-3 py-2 rounded-xl text-[13px] font-medium transition-all ${
+                    isActive
+                      ? 'text-primary-400 bg-primary-600/10'
+                      : 'text-surface-600 hover:text-white hover:bg-surface-200'
+                  }`
+                }
+              >
+                Analyze
+              </NavLink>
+              {user && (
+                <>
+                  <NavLink
+                    to="/dashboard"
+                    className={({ isActive }) =>
+                      `px-3 py-2 rounded-xl text-[13px] font-medium transition-all ${
+                        isActive
+                          ? 'text-primary-400 bg-primary-600/10'
+                          : 'text-surface-600 hover:text-white hover:bg-surface-200'
+                      }`
+                    }
+                  >
+                    Dashboard
+                  </NavLink>
+                  <NavLink
+                    to="/wishlist"
+                    className={({ isActive }) =>
+                      `px-3 py-2 rounded-xl text-[13px] font-medium transition-all ${
+                        isActive
+                          ? 'text-primary-400 bg-primary-600/10'
+                          : 'text-surface-600 hover:text-white hover:bg-surface-200'
+                      }`
+                    }
+                  >
+                    Wishlist
+                  </NavLink>
+                </>
+              )}
+            </nav>
+
+            <div className="flex-1" />
 
             <button
               onClick={() => navigate('/search')}
@@ -250,9 +238,6 @@ export default function Layout() {
             >
               <Search className="w-4 h-4 text-surface-500 group-hover:text-primary-400" />
               <span className="hidden sm:inline">Ask the AI anything…</span>
-              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-surface-200 border border-surface-300 text-[11px] text-surface-500">
-                <Command className="w-3 h-3" /> K
-              </span>
             </button>
 
             {user ? (
@@ -264,13 +249,20 @@ export default function Layout() {
                 {initials}
               </button>
             ) : (
-              <button
-                onClick={() => navigate('/login')}
-                className="flex items-center justify-center w-9 h-9 rounded-2xl bg-primary-700 border border-primary-500/40 text-white hover:bg-primary-hover transition-all"
-                aria-label="Sign in"
-              >
-                <LogIn className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigate('/login')}
+                  className="px-4 py-2 rounded-xl text-[13px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all"
+                >
+                  Sign in
+                </button>
+                <button
+                  onClick={() => navigate('/signup')}
+                  className="btn btn-sm btn-primary"
+                >
+                  Get started
+                </button>
+              </div>
             )}
           </div>
         </header>

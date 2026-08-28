@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { Globe, ExternalLink, MessageSquare, Play, Newspaper, Users, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 
-const BLOCKED = /amazon|flipkart|myntra|meesho|ajio|croma|reliance|tatacliq|jiomart|zepto|blinkit|instamart|swiggy|bigbasket|nykaa|lenskart|samsung\.com|apple\.com|google\.com|oneplus|realme|xiaomi|oppo|vivo|nokia\.com|motorola\.com|wikipedia|\.gov|\.edu/i;
+const BLOCKED = /amazon|flipkart/i;
 
 const CATEGORIES = [
   { key: 'community', label: 'Community', icon: Users, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', match: (t) => t === 'community' },

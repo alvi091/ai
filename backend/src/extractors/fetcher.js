@@ -20,13 +20,7 @@ const { fetchViaUnlocker } = require('../services/webUnlocker');
 async function fetchPageSmart(url, site = null) {
   // 1. Try Web Unlocker first — handles everything (IP rotation, CAPTCHA, JS rendering)
   if (config.webUnlocker?.enabled) {
-    const unlockerResult = await fetchViaUnlocker(url, {
-      proxy: 'residential:in',
-      mode: 'auto',
-      enableSolver: true,
-      jsWaitSelector: site?.renderWait || undefined,
-      jsWaitTimeout: 3000,
-    });
+    const unlockerResult = await fetchViaUnlocker(url);
     if (unlockerResult.ok && unlockerResult.html.length >= config.crawler.minHtmlBytes) {
       return {
         ok: true,
@@ -168,7 +162,7 @@ async function fetchPage(url, site) {
   if (!first.ok) {
     // If Web Unlocker is available, try it as fallback for failed HTTP
     if (config.webUnlocker?.enabled) {
-      const unlockerResult = await fetchViaUnlocker(url, { proxy: 'residential:in', mode: 'auto' });
+      const unlockerResult = await fetchViaUnlocker(url);
       if (unlockerResult.ok) {
         return { ok: true, url: unlockerResult.url || url, html: unlockerResult.html, status: 200, contentType: 'text/html', rendered: true, source: 'web-unlocker-fallback' };
       }
@@ -180,7 +174,7 @@ async function fetchPage(url, site) {
     console.log(`[fetcher] Myntra geo-block detected (no product signals), skipping Playwright`);
     // Try Web Unlocker for Myntra geo-block
     if (config.webUnlocker?.enabled) {
-      const unlockerResult = await fetchViaUnlocker(url, { proxy: 'residential:in', mode: 'js_rendering' });
+      const unlockerResult = await fetchViaUnlocker(url);
       if (unlockerResult.ok && unlockerResult.html.length >= config.crawler.minHtmlBytes) {
         return { ok: true, url: unlockerResult.url || url, html: unlockerResult.html, status: 200, contentType: 'text/html', rendered: true, source: 'web-unlocker-myntra' };
       }
@@ -195,7 +189,7 @@ async function fetchPage(url, site) {
   if (renderable) {
     // Try Web Unlocker first for blocked pages
     if (config.webUnlocker?.enabled) {
-      const unlockerResult = await fetchViaUnlocker(url, { proxy: 'residential:in', mode: 'auto', enableSolver: true });
+      const unlockerResult = await fetchViaUnlocker(url);
       if (unlockerResult.ok && unlockerResult.html.length >= config.crawler.minHtmlBytes) {
         return { ok: true, url: unlockerResult.url || first.url || url, html: unlockerResult.html, status: 200, contentType: 'text/html', rendered: true, source: 'web-unlocker-blocked' };
       }

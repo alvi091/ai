@@ -17,6 +17,7 @@ const SHORTENER_HOSTS = [
   'bit.ly', 'bitly.com', 't.co', 'tinyurl.com', 'goo.gl', 'amzn.to', 'amzn.in',
   'rebrand.ly', 'is.gd', 'buff.ly', 'ow.ly', 'cutt.ly', 'shorte.st', 'rb.gy',
   'lnk.to', 'amz.in', 'myntr.in', 'flpkrt', 'nike.link',
+  'dl.flipkart.com',
 ];
 
 const BLOCKED_HOSTS = [
@@ -41,7 +42,14 @@ function validateInput(raw) {
   if (input.split(/\s+/).length > 8 || !/\S+\.\S{2,}/.test(input)) {
     return { ok: false, status: 'not_a_url', error: 'That doesn\u2019t look like a product link. Paste the full product URL (e.g. https://www.amazon.in/dp/B0XXXXX).' };
   }
-  const withScheme = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+  // Fix common typos: ttps://, htpps://, httpss://, etc.
+  let cleaned = input
+    .replace(/^htpps?:\/\//i, 'https://')
+    .replace(/^httpss?:\/\//i, 'https://')
+    .replace(/^ttps:\/\//i, 'https://')
+    .replace(/^tps:\/\//i, 'https://')
+    .replace(/^ps:\/\//i, 'https://');
+  const withScheme = /^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`;
   let parsed;
   try {
     parsed = new URL(withScheme);
