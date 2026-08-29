@@ -304,3 +304,39 @@ model ProductResearch {
   @@index([productUrl])
   @@index([researchType])
 }
+
+model Visitor {
+  id        String   @id @default(uuid())
+  visitorId String
+  userId    String?
+  ip        String?
+  userAgent String?
+  referrer  String?
+  path      String
+  country   String?
+  city      String?
+  device    String?
+  browser   String?
+  os        String?
+  isUnique  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([visitorId])
+  @@index([createdAt])
+  @@index([path])
+  @@index([userId])
+}
+
+model PageView {
+  id        String   @id @default(uuid())
+  visitorId String
+  userId    String?
+  path      String
+  referrer  String?
+  duration  Int?
+  createdAt DateTime @default(now())
+
+  @@index([visitorId])
+  @@index([createdAt])
+  @@index([path])
+}

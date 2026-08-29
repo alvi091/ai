@@ -125,4 +125,14 @@ export const research = {
   getAlternatives: (data) => api.post('/research/alternatives', data),
 };
 
+export const visitors = {
+  getStats: () => api.get('/visitors/stats'),
+  getTimeline: (days) => api.get('/visitors/timeline', { params: { days } }),
+  getPages: (days) => api.get('/visitors/pages', { params: { days } }),
+  getReferrers: (days) => api.get('/visitors/referrers', { params: { days } }),
+  getDevices: (days) => api.get('/visitors/devices', { params: { days } }),
+  getRecent: (limit) => api.get('/visitors/recent', { params: { limit } }),
+  getHourly: (days) => api.get('/visitors/hourly', { params: { days } }),
+};
+
 export default api;

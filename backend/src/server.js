@@ -23,6 +23,8 @@ const analyzeRoutes = require('./routes/analyze');
 const chatRoutes = require('./routes/chat');
 const marketplaceRoutes = require('./routes/marketplace');
 const researchRoutes = require('./routes/research');
+const visitorRoutes = require('./routes/visitors');
+const { trackVisitor } = require('./middleware/visitorTracker');
 
 const app = express();
 
@@ -98,6 +100,9 @@ app.use('/api/analyze', analyzeRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/research', researchRoutes);
+app.use('/api/visitors', visitorRoutes);
+
+app.use(trackVisitor);
 
 // Serve the built frontend (same-origin deployment) if it exists
 const distDir = path.join(__dirname, '..', '..', 'frontend', 'dist');
