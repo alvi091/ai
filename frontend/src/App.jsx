@@ -55,6 +55,14 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+function AdminRoute({ children }) {
+  const { user, loading, isAdmin } = useAuth();
+  if (loading) return <Splash />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!isAdmin) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <Splash />;
@@ -103,7 +111,7 @@ function AppRoutes() {
           <Route path="/history" element={<Suspense fallback={<Splash />}><SearchHistory /></Suspense>} />
           <Route path="/profile" element={<Suspense fallback={<Splash />}><Profile /></Suspense>} />
           <Route path="/settings" element={<Suspense fallback={<Splash />}><Settings /></Suspense>} />
-          <Route path="/admin" element={<Suspense fallback={<Splash />}><AdminDashboard /></Suspense>} />
+          <Route path="/admin" element={<AdminRoute><Suspense fallback={<Splash />}><AdminDashboard /></Suspense></AdminRoute>} />
         </Route>
         <Route path="*" element={<Suspense fallback={<Splash />}><NotFound /></Suspense>} />
       </Routes>

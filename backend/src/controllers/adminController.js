@@ -82,4 +82,27 @@ const updatePrices = asyncHandler(async (req, res) => {
   res.json({ message: `${count} products updated` });
 });
 
-module.exports = { getAdminDashboard, updateProduct, deleteProduct, getAllUsers, updatePrices };
+const promoteUser = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { role: 'admin' },
+    select: { id: true, name: true, email: true, role: true },
+  });
+  res.json({ user, message: `${user.name} promoted to admin` });
+});
+
+const demoteUser = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  if (userId === req.user.id) {
+    return res.status(400).json({ error: 'Cannot demote yourself' });
+  }
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { role: 'user' },
+    select: { id: true, name: true, email: true, role: true },
+  });
+  res.json({ user, message: `${user.name} demoted to user` });
+});
+
+module.exports = { getAdminDashboard, updateProduct, deleteProduct, getAllUsers, updatePrices, promoteUser, demoteUser };

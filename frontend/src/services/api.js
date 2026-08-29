@@ -106,6 +106,8 @@ export const admin = {
   updateProduct: (id, data) => api.put(`/admin/products/${id}`, data),
   deleteProduct: (id) => api.delete(`/admin/products/${id}`),
   updatePrices: (updates) => api.post('/admin/prices', { updates }),
+  promoteUser: (userId) => api.post(`/admin/promote/${userId}`),
+  demoteUser: (userId) => api.post(`/admin/demote/${userId}`),
 };
 
 export const chat = {

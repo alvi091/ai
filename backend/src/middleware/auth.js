@@ -14,7 +14,7 @@ const authenticate = async (req, res, next) => {
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, email: true, name: true },
+      select: { id: true, email: true, name: true, role: true },
     });
 
     if (!user) {
@@ -29,6 +29,13 @@ const authenticate = async (req, res, next) => {
     }
     return res.status(401).json({ error: 'Invalid token' });
   }
+};
+
+const isAdmin = (req, res, next) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
 };
 
 const optionalAuth = async (req, res, next) => {
@@ -47,4 +54,4 @@ const optionalAuth = async (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, optionalAuth };
+module.exports = { authenticate, optionalAuth, isAdmin };

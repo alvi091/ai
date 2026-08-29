@@ -12,7 +12,7 @@ const signup = asyncHandler(async (req, res) => {
   const hashedPassword = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({
     data: { email, password: hashedPassword, name },
-    select: { id: true, email: true, name: true, createdAt: true },
+    select: { id: true, email: true, name: true, role: true, createdAt: true },
   });
   const token = generateToken(user.id);
   res.status(201).json({ user, token });
@@ -25,7 +25,7 @@ const login = asyncHandler(async (req, res) => {
   const isValid = await bcrypt.compare(password, user.password);
   if (!isValid) throw new UnauthorizedError('Invalid email or password');
   const token = generateToken(user.id);
-  res.json({ user: { id: user.id, email: user.email, name: user.name }, token });
+  res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role }, token });
 });
 
 const forgotPassword = asyncHandler(async (req, res) => {
@@ -51,7 +51,7 @@ const resetPassword = asyncHandler(async (req, res) => {
 const getProfile = asyncHandler(async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
-    select: { id: true, email: true, name: true, preferredBrands: true, budgetMin: true, budgetMax: true, favoriteColors: true, shoeSize: true, clothingSize: true, createdAt: true },
+    select: { id: true, email: true, name: true, role: true, preferredBrands: true, budgetMin: true, budgetMax: true, favoriteColors: true, shoeSize: true, clothingSize: true, createdAt: true },
   });
   res.json({ user });
 });
