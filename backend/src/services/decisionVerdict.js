@@ -126,7 +126,7 @@ function decide(signals, seed = 0) {
   }
 
   // --- On sale but not at floor ---
-  if (onSale && discountPercent >= 15 && worth >= 60) {
+  if (onSale && discountPercent >= 15 && worth >= 60 && worth < 65) {
     addFactor('Active discount', 'positive', 'high', `${discountPercent}% off`);
     addFactor('Not at floor', 'neutral', 'medium', `still ${positionPercent}% above its recent low`);
     const saleContext = hasPriceData ? `, which has gone as low as ${c(signals, low)} within the tracked window` : '';
@@ -165,7 +165,7 @@ function decide(signals, seed = 0) {
   }
 
   // --- Specific users ---
-  if (suitability && suitability.score >= 70 && worth >= 60) {
+  if (suitability && suitability.score >= 70 && worth >= 60 && worth < 65) {
     addFactor('Strong personal match', 'positive', 'high', `${suitability.score}% suitability for your needs`);
     return verdict(VERDICTS.GOOD_FOR_SPECIFIC_USERS, pick(seed, [
       `The data is lukewarm in places, but this product matches your specific requirements unusually well (${suitability.score}% suitability). For a buyer with your profile it is a reasonable pick — for general shoppers, less so.`,
