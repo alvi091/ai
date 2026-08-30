@@ -181,6 +181,114 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-surface-50">
+      {/* Mobile drawer */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm sm:hidden"
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+              className="fixed right-0 top-0 bottom-0 z-50 w-72 bg-surface-50 border-l border-surface-300 shadow-2xl sm:hidden overflow-y-auto"
+            >
+              <div className="flex items-center justify-between px-5 pt-5 pb-4">
+                <Logo size={22} />
+                <button onClick={() => setSidebarOpen(false)} className="p-2 rounded-xl hover:bg-surface-200 transition-colors">
+                  <X className="w-5 h-5 text-surface-500" />
+                </button>
+              </div>
+
+              <div className="px-4 pb-6 space-y-1">
+                <button
+                  onClick={() => { setSidebarOpen(false); navigate('/analyze'); }}
+                  className="flex items-center gap-3 w-full h-11 px-3 rounded-xl text-[13.5px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all"
+                >
+                  <Sparkles className="w-[18px] h-[18px]" />
+                  Analyze
+                </button>
+                <button
+                  onClick={() => { setSidebarOpen(false); navigate('/search'); }}
+                  className="flex items-center gap-3 w-full h-11 px-3 rounded-xl text-[13.5px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all"
+                >
+                  <Search className="w-[18px] h-[18px]" />
+                  AI Search
+                </button>
+              </div>
+
+              <div className="border-t border-surface-300 px-4 pt-4 pb-6 space-y-1">
+                {user ? (
+                  <>
+                    <button
+                      onClick={() => { setSidebarOpen(false); navigate('/dashboard'); }}
+                      className="flex items-center gap-3 w-full h-11 px-3 rounded-xl text-[13.5px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all"
+                    >
+                      <LayoutDashboard className="w-[18px] h-[18px]" />
+                      Dashboard
+                    </button>
+                    <button
+                      onClick={() => { setSidebarOpen(false); navigate('/wishlist'); }}
+                      className="flex items-center gap-3 w-full h-11 px-3 rounded-xl text-[13.5px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all"
+                    >
+                      <Heart className="w-[18px] h-[18px]" />
+                      Wishlist
+                    </button>
+                    <button
+                      onClick={() => { setSidebarOpen(false); navigate('/profile'); }}
+                      className="flex items-center gap-3 w-full h-11 px-3 rounded-xl text-[13.5px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all"
+                    >
+                      <User className="w-[18px] h-[18px]" />
+                      Profile
+                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => { setSidebarOpen(false); navigate('/admin'); }}
+                        className="flex items-center gap-3 w-full h-11 px-3 rounded-xl text-[13.5px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all"
+                      >
+                        <Shield className="w-[18px] h-[18px]" />
+                        Admin
+                      </button>
+                    )}
+                    <div className="pt-2 mt-2 border-t border-surface-300">
+                      <button
+                        onClick={() => { setSidebarOpen(false); handleLogout(); }}
+                        className="flex items-center gap-3 w-full h-11 px-3 rounded-xl text-[13.5px] font-medium text-danger hover:bg-danger/10 transition-all"
+                      >
+                        <LogOut className="w-[18px] h-[18px]" />
+                        Sign out
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => { setSidebarOpen(false); navigate('/login'); }}
+                      className="flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-surface-200 text-[13px] font-semibold text-surface-600 hover:text-white hover:bg-surface-300 transition-all"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      Sign in
+                    </button>
+                    <button
+                      onClick={() => { setSidebarOpen(false); navigate('/signup'); }}
+                      className="flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-primary-600 text-[13px] font-semibold text-white hover:bg-primary-hover transition-all"
+                    >
+                      Get started
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Main column - no sidebar */}
       <div>
         <header className="sticky top-0 z-30 bg-surface-50/85 backdrop-blur-xl border-b border-surface-300/70">
@@ -234,10 +342,10 @@ export default function Layout() {
 
             <button
               onClick={() => navigate('/search')}
-              className="group flex items-center gap-2.5 h-10 pl-3.5 pr-2 rounded-2xl border border-surface-300 bg-surface-100 text-[13px] text-surface-500 hover:border-primary-600/50 hover:text-surface-300 transition-all"
+              className="hidden sm:flex group items-center gap-2.5 h-10 pl-3.5 pr-2 rounded-2xl border border-surface-300 bg-surface-100 text-[13px] text-surface-500 hover:border-primary-600/50 hover:text-surface-300 transition-all"
             >
               <Search className="w-4 h-4 text-surface-500 group-hover:text-primary-400" />
-              <span className="hidden sm:inline">Ask the AI anything…</span>
+              <span>Ask the AI anything…</span>
             </button>
 
             {user ? (
@@ -249,20 +357,29 @@ export default function Layout() {
                 {initials}
               </button>
             ) : (
-              <div className="flex items-center gap-2">
+              <>
+                <div className="hidden sm:flex items-center gap-2">
+                  <button
+                    onClick={() => navigate('/login')}
+                    className="px-4 py-2 rounded-xl text-[13px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all"
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    onClick={() => navigate('/signup')}
+                    className="btn btn-sm btn-primary"
+                  >
+                    Get started
+                  </button>
+                </div>
                 <button
-                  onClick={() => navigate('/login')}
-                  className="px-4 py-2 rounded-xl text-[13px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all"
+                  onClick={() => setSidebarOpen(true)}
+                  className="sm:hidden flex items-center justify-center w-9 h-9 rounded-2xl bg-surface-200 border border-surface-300 text-surface-500 hover:border-primary-600/50 transition-all"
+                  aria-label="Menu"
                 >
-                  Sign in
+                  <Menu className="w-5 h-5" />
                 </button>
-                <button
-                  onClick={() => navigate('/signup')}
-                  className="btn btn-sm btn-primary"
-                >
-                  Get started
-                </button>
-              </div>
+              </>
             )}
           </div>
         </header>
