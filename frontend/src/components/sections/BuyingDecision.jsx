@@ -76,7 +76,7 @@ export default function BuyingDecision({ report, analytics, personas, marketplac
   const worth = analytics?.worth;
   if (!verdict) return null;
 
-  const v = getVerdict(verdict.key);
+  const v = getVerdict(verdict.verdict || verdict.key);
   const Icon = v.icon;
   const confidence = verdict.confidence || 0;
   const factors = verdict.factors || [];

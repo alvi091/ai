@@ -23,7 +23,7 @@ export default function DecisionHero({ report, product }) {
   const verdict = report?.verdict;
   if (!verdict) return null;
 
-  const style = getDecisionStyle(verdict.key);
+  const style = getDecisionStyle(verdict.verdict || verdict.key);
   const confidence = verdict.confidence || 0;
 
   return (
