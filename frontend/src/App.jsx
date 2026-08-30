@@ -59,7 +59,9 @@ function AppRoutes() {
       <ScrollToTop />
       <AnimatePresence mode="wait" initial={false}>
         <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<Suspense fallback={<Splash />}><Landing /></Suspense>} />
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Suspense fallback={<Splash />}><Landing /></Suspense>} />
+        </Route>
         <Route path="/about" element={<Suspense fallback={<Splash />}><About /></Suspense>} />
         <Route path="/privacy" element={<Suspense fallback={<Splash />}><Privacy /></Suspense>} />
         <Route path="/terms" element={<Suspense fallback={<Splash />}><Terms /></Suspense>} />

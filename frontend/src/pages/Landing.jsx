@@ -1,10 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useCallback, useRef } from 'react';
-import { motion, useMotionValue, useSpring, AnimatePresence } from 'framer-motion';
+import { motion, useMotionValue, useSpring } from 'framer-motion';
 import {
-  Brain, Sparkles, ArrowRight, ShieldCheck, Wand2, Menu, X,
+  Brain, Sparkles, ArrowRight, ShieldCheck, Wand2,
 } from 'lucide-react';
-import Logo from '../components/ui/Logo';
 import PublicFooter from '../components/layout/PublicFooter';
 import SectionLabel from '../components/ui/SectionLabel';
 import { fadeUp, stagger } from '../lib/motion';
@@ -29,12 +28,8 @@ export default function Landing() {
     [navigate, url]
   );
 
-  const goAnalyze = useCallback(() => navigate('/analyze'), [navigate]);
-
   return (
     <div className="min-h-screen bg-surface-50 overflow-x-hidden">
-      <PublicHeader onAnalyze={goAnalyze} />
-
       {/* ============ HERO ============ */}
       <section className="relative flex min-h-screen items-center pt-24 pb-20 sm:pb-24">
         <HeroCursorGlow />
@@ -211,7 +206,7 @@ export default function Landing() {
       </section>
 
       {/* ============ CTA ============ */}
-      <section className="py-24 sm:py-32">
+      <section id="cta" className="py-24 sm:py-32">
         <div className="shell">
           <motion.div
             variants={fadeUp}
@@ -229,7 +224,7 @@ export default function Landing() {
                 Paste a product link and get a complete, evidence-backed buying decision in seconds.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <button onClick={goAnalyze} className="btn-primary">
+                <button onClick={() => navigate('/analyze')} className="btn-primary">
                   <Wand2 className="w-4 h-4" />
                   Analyze a product
                   <ArrowRight className="w-4 h-4" />
@@ -280,75 +275,5 @@ function HeroCursorGlow() {
         />
       </motion.div>
     </div>
-  );
-}
-
-function PublicHeader({ onAnalyze }) {
-  const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  const scrollTo = (id) => {
-    setMenuOpen(false);
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  return (
-    <motion.header
-      initial={{ opacity: 0, y: -12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      className="fixed top-0 left-0 right-0 z-50"
-    >
-      <div className="mx-auto max-w-[1440px] px-3 sm:px-8 lg:px-12">
-        <div className="mt-4 flex items-center justify-between gap-2 h-14 px-3 sm:px-4 rounded-2xl border border-surface-300/70 bg-surface-100/80 backdrop-blur-xl">
-          <Logo size={26} />
-          <div className="hidden md:flex items-center gap-1">
-            <button onClick={() => scrollTo('how')} className="px-4 py-2 rounded-xl text-[13px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all">
-              How it works
-            </button>
-            <button onClick={onAnalyze} className="px-4 py-2 rounded-xl text-[13px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all">
-              Analyze
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setMenuOpen((o) => !o)}
-              className="md:hidden flex items-center justify-center w-9 h-9 rounded-xl text-surface-600 hover:text-white hover:bg-surface-200 transition-all"
-              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-              aria-expanded={menuOpen}
-            >
-              {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-          </div>
-        </div>
-
-        <AnimatePresence>
-          {menuOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="md:hidden mt-2 rounded-2xl border border-surface-300 bg-surface-100/95 backdrop-blur-xl overflow-hidden shadow-lift"
-            >
-              <div className="p-2 flex flex-col">
-                <button
-                  onClick={() => scrollTo('how')}
-                  className="px-4 py-3 rounded-xl text-left text-[14px] font-medium text-surface-700 hover:text-white hover:bg-surface-200 transition-all"
-                >
-                  How it works
-                </button>
-                <button
-                  onClick={() => { setMenuOpen(false); onAnalyze(); }}
-                  className="px-4 py-3 rounded-xl text-left text-[14px] font-medium text-primary-400 hover:bg-surface-200 transition-all"
-                >
-                  Analyze a product
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </motion.header>
   );
 }
