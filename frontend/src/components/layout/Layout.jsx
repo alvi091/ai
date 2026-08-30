@@ -81,7 +81,7 @@ export default function Layout() {
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 sm:px-8 h-16">
           <Logo size={24} />
 
-          <nav className="hidden md:flex items-center justify-center gap-1">
+          <nav className="hidden md:flex items-center justify-end gap-1">
             {NAV.map(({ to, label }) => (
               <NavLink
                 key={to}
