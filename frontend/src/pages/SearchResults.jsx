@@ -9,7 +9,7 @@ import ProductCard from '../components/ui/ProductCard';
 import ReasoningCard, { ThinkingDots } from '../components/ui/ReasoningCard';
 import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
-import GuestBanner from '../components/ui/GuestBanner';
+
 import { fadeUpSm, fadeUp } from '../lib/motion';
 
 const EXAMPLES = [
@@ -210,7 +210,6 @@ export default function SearchResults() {
 
         {status === 'done' && (
           <motion.div key="done" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-8">
-            <GuestBanner />
 
             {/* AI Briefing */}
             <motion.div variants={fadeUp} initial="hidden" animate="show" className="card card-pad overflow-hidden border-l-[3px] border-l-primary-600">

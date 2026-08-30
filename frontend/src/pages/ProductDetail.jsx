@@ -35,7 +35,7 @@ import ScoreGauge from '../components/ui/ScoreGauge';
 import ConfidenceRing from '../components/ui/ConfidenceRing';
 import PriceTrendChart from '../components/ui/PriceTrendChart';
 import Skeleton from '../components/ui/Skeleton';
-import GuestBanner from '../components/ui/GuestBanner';
+
 import { formatPrice } from '../utils/format';
 
 const VERDICT_TONE = {

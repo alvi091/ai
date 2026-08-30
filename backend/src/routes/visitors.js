@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../database');
-const { authenticate } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 
 const getVisitorStats = asyncHandler(async (req, res) => {
@@ -165,12 +164,12 @@ const getHourlyTraffic = asyncHandler(async (req, res) => {
   })));
 });
 
-router.get('/stats', authenticate, getVisitorStats);
-router.get('/timeline', authenticate, getVisitorTimeline);
-router.get('/pages', authenticate, getVisitorPages);
-router.get('/referrers', authenticate, getVisitorReferrers);
-router.get('/devices', authenticate, getVisitorDevices);
-router.get('/recent', authenticate, getRecentVisitors);
-router.get('/hourly', authenticate, getHourlyTraffic);
+router.get('/stats', getVisitorStats);
+router.get('/timeline', getVisitorTimeline);
+router.get('/pages', getVisitorPages);
+router.get('/referrers', getVisitorReferrers);
+router.get('/devices', getVisitorDevices);
+router.get('/recent', getRecentVisitors);
+router.get('/hourly', getHourlyTraffic);
 
 module.exports = router;

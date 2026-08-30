@@ -234,9 +234,6 @@ export default function Landing() {
                   Analyze a product
                   <ArrowRight className="w-4 h-4" />
                 </button>
-                <button onClick={() => navigate('/signup')} className="btn-secondary">
-                  Create a free account
-                </button>
               </div>
             </div>
           </motion.div>
@@ -314,12 +311,6 @@ function PublicHeader({ onAnalyze }) {
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => navigate('/login')} className="hidden sm:inline-flex px-4 py-2 rounded-xl text-[13px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all">
-              Sign in
-            </button>
-            <button onClick={() => navigate('/signup')} className="hidden md:inline-flex btn btn-sm btn-primary">
-              Get started
-            </button>
             <button
               onClick={() => setMenuOpen((o) => !o)}
               className="md:hidden flex items-center justify-center w-9 h-9 rounded-xl text-surface-600 hover:text-white hover:bg-surface-200 transition-all"
@@ -353,20 +344,6 @@ function PublicHeader({ onAnalyze }) {
                 >
                   Analyze a product
                 </button>
-                <div className="mt-1 pt-2 border-t border-surface-300 flex items-center gap-2">
-                  <button
-                    onClick={() => { setMenuOpen(false); navigate('/login'); }}
-                    className="flex-1 px-4 py-2.5 rounded-xl text-[14px] font-medium text-surface-600 hover:text-white hover:bg-surface-200 transition-all"
-                  >
-                    Sign in
-                  </button>
-                  <button
-                    onClick={() => { setMenuOpen(false); navigate('/signup'); }}
-                    className="flex-1 btn btn-sm btn-primary"
-                  >
-                    Get started
-                  </button>
-                </div>
               </div>
             </motion.div>
           )}
