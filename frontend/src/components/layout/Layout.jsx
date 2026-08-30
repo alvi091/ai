@@ -78,28 +78,14 @@ export default function Layout() {
 
       {/* Header */}
       <header className="sticky top-0 z-30 bg-surface-50/85 backdrop-blur-xl border-b border-surface-300/70">
-        <div className="flex items-center gap-3 px-4 sm:px-8 h-16">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 sm:px-8 h-16">
           <Logo size={24} />
 
-          <div className="flex-1 flex justify-center">
-            <nav className="hidden md:flex items-center gap-1">
-              {NAV.map(({ to, label }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  className={({ isActive }) =>
-                    `px-3 py-2 rounded-xl text-[13px] font-medium transition-all ${
-                      isActive
-                        ? 'text-primary-400 bg-primary-600/10'
-                        : 'text-surface-600 hover:text-white hover:bg-surface-200'
-                    }`
-                  }
-                >
-                  {label}
-                </NavLink>
-              ))}
+          <nav className="hidden md:flex items-center justify-center gap-1">
+            {NAV.map(({ to, label }) => (
               <NavLink
-                to="/admin"
+                key={to}
+                to={to}
                 className={({ isActive }) =>
                   `px-3 py-2 rounded-xl text-[13px] font-medium transition-all ${
                     isActive
@@ -108,26 +94,40 @@ export default function Layout() {
                   }`
                 }
               >
-                Admin
+                {label}
               </NavLink>
-            </nav>
+            ))}
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `px-3 py-2 rounded-xl text-[13px] font-medium transition-all ${
+                  isActive
+                    ? 'text-primary-400 bg-primary-600/10'
+                    : 'text-surface-600 hover:text-white hover:bg-surface-200'
+                }`
+              }
+            >
+              Admin
+            </NavLink>
+          </nav>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/search')}
+              className="hidden sm:flex group items-center gap-2.5 h-10 pl-3.5 pr-2 rounded-2xl border border-surface-300 bg-surface-100 text-[13px] text-surface-500 hover:border-primary-600/50 hover:text-surface-300 transition-all"
+            >
+              <Search className="w-4 h-4 text-surface-500 group-hover:text-primary-400" />
+              <span>Ask the AI anything…</span>
+            </button>
+
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="sm:hidden flex items-center justify-center w-9 h-9 rounded-2xl bg-surface-200 border border-surface-300 text-surface-500 hover:border-primary-600/50 transition-all"
+              aria-label="Menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
           </div>
-
-          <button
-            onClick={() => navigate('/search')}
-            className="hidden sm:flex group items-center gap-2.5 h-10 pl-3.5 pr-2 rounded-2xl border border-surface-300 bg-surface-100 text-[13px] text-surface-500 hover:border-primary-600/50 hover:text-surface-300 transition-all"
-          >
-            <Search className="w-4 h-4 text-surface-500 group-hover:text-primary-400" />
-            <span>Ask the AI anything…</span>
-          </button>
-
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="sm:hidden flex items-center justify-center w-9 h-9 rounded-2xl bg-surface-200 border border-surface-300 text-surface-500 hover:border-primary-600/50 transition-all"
-            aria-label="Menu"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
         </div>
       </header>
 
