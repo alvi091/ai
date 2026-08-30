@@ -7,11 +7,8 @@ import { fadeUpSm } from '../../lib/motion';
 
 const NAV = [
   { to: '/analyze', label: 'Analyze' },
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/wishlist', label: 'Wishlist' },
-  { to: '/compare', label: 'Compare' },
-  { to: '/history', label: 'History' },
-  { to: '/admin', label: 'Admin' },
+  { to: '/about', label: 'About' },
+  
 ];
 
 export default function Layout({ children }) {
