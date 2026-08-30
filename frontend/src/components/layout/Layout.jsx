@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Menu, X } from 'lucide-react';
@@ -14,7 +14,7 @@ const NAV = [
   { to: '/admin', label: 'Admin' },
 ];
 
-export default function Layout() {
+export default function Layout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -138,11 +138,11 @@ export default function Layout() {
 
       <main className={isLanding ? '' : 'px-4 sm:px-8 pt-28 pb-8 lg:pt-32 lg:pb-10'}>
         {isLanding ? (
-          <Outlet />
+          children
         ) : (
           <div className="mx-auto w-full max-w-[1200px]">
             <motion.div key={location.pathname} variants={fadeUpSm} initial="hidden" animate="show">
-              <Outlet />
+              {children}
             </motion.div>
           </div>
         )}

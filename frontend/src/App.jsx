@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Layout from './components/layout/Layout';
 import Logo from './components/ui/Logo';
@@ -57,31 +57,27 @@ function AppRoutes() {
   return (
     <>
       <ScrollToTop />
-      <AnimatePresence mode="wait" initial={false}>
-        <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Suspense fallback={<Splash />}><Landing /></Suspense>} />
-        </Route>
-        <Route path="/about" element={<Suspense fallback={<Splash />}><About /></Suspense>} />
-        <Route path="/privacy" element={<Suspense fallback={<Splash />}><Privacy /></Suspense>} />
-        <Route path="/terms" element={<Suspense fallback={<Splash />}><Terms /></Suspense>} />
-
-        {/* App shell routes */}
-        <Route element={<Layout />}>
-          <Route path="/analyze" element={<Suspense fallback={<Splash />}><Analyze /></Suspense>} />
-          <Route path="/search" element={<Suspense fallback={<Splash />}><SearchResults /></Suspense>} />
-          <Route path="/products/:id" element={<Suspense fallback={<Splash />}><ProductDetail /></Suspense>} />
-          <Route path="/dashboard" element={<Suspense fallback={<Splash />}><Dashboard /></Suspense>} />
-          <Route path="/wishlist" element={<Suspense fallback={<Splash />}><Wishlist /></Suspense>} />
-          <Route path="/compare" element={<Suspense fallback={<Splash />}><Compare /></Suspense>} />
-          <Route path="/history" element={<Suspense fallback={<Splash />}><SearchHistory /></Suspense>} />
-          <Route path="/profile" element={<Suspense fallback={<Splash />}><Profile /></Suspense>} />
-          <Route path="/settings" element={<Suspense fallback={<Splash />}><Settings /></Suspense>} />
-          <Route path="/admin" element={<Suspense fallback={<Splash />}><AdminDashboard /></Suspense>} />
-        </Route>
-        <Route path="*" element={<Suspense fallback={<Splash />}><NotFound /></Suspense>} />
-      </Routes>
-    </AnimatePresence>
+      <Layout>
+        <AnimatePresence mode="wait" initial={false}>
+          <Routes location={location} key={location.pathname}>
+            <Route index element={<Suspense fallback={<Splash />}><Landing /></Suspense>} />
+            <Route path="analyze" element={<Suspense fallback={<Splash />}><Analyze /></Suspense>} />
+            <Route path="search" element={<Suspense fallback={<Splash />}><SearchResults /></Suspense>} />
+            <Route path="products/:id" element={<Suspense fallback={<Splash />}><ProductDetail /></Suspense>} />
+            <Route path="dashboard" element={<Suspense fallback={<Splash />}><Dashboard /></Suspense>} />
+            <Route path="wishlist" element={<Suspense fallback={<Splash />}><Wishlist /></Suspense>} />
+            <Route path="compare" element={<Suspense fallback={<Splash />}><Compare /></Suspense>} />
+            <Route path="history" element={<Suspense fallback={<Splash />}><SearchHistory /></Suspense>} />
+            <Route path="profile" element={<Suspense fallback={<Splash />}><Profile /></Suspense>} />
+            <Route path="settings" element={<Suspense fallback={<Splash />}><Settings /></Suspense>} />
+            <Route path="admin" element={<Suspense fallback={<Splash />}><AdminDashboard /></Suspense>} />
+            <Route path="about" element={<Suspense fallback={<Splash />}><About /></Suspense>} />
+            <Route path="privacy" element={<Suspense fallback={<Splash />}><Privacy /></Suspense>} />
+            <Route path="terms" element={<Suspense fallback={<Splash />}><Terms /></Suspense>} />
+            <Route path="*" element={<Suspense fallback={<Splash />}><NotFound /></Suspense>} />
+          </Routes>
+        </AnimatePresence>
+      </Layout>
     </>
   );
 }
