@@ -7,7 +7,7 @@ const PILLARS = [
   { icon: TrendingDown, title: 'Price Intelligence', desc: 'Historical trends, fair-price estimates, and timing signals so you never buy at the top.' },
   { icon: Heart, title: 'Shopping Memory', desc: 'Ayymus learns your budget, style, and preferences to personalize every decision over time.' },
   { icon: GitCompare, title: 'Intelligent Comparison', desc: 'Radar-grade attribute comparison with a clear AI verdict — no spreadsheet tables.' },
-  { icon: ShieldCheck, title: 'Honest Signals', desc: 'If a store blocks us or a page is sparse, we say so instead of faking data for products we can\u2019t read.' },
+  { icon: ShieldCheck, title: 'Honest Signals', desc: "If a store blocks us or a page is sparse, we say so instead of faking data for products we can't read." },
 ];
 
 export default function About() {
@@ -32,10 +32,10 @@ export default function About() {
       <div className="mt-10 rounded-2xl border border-line bg-surface-100 p-8">
         <h2 className="font-display text-lg font-semibold text-white">Our promise</h2>
         <div className="mt-4 space-y-3 text-[14px] leading-relaxed text-surface-500">
-          <p>• We never invent reviews, prices, or ratings for pages we couldn\u2019t read. A blocked store returns a clear explanation — not a confident guess.</p>
-          <p>• Every recommendation shows its reasoning: why this product fits, what it scores on, and what could go wrong.</p>
-          <p>• Your shopping data personalizes your results and stays private to your account.</p>
-          <p>• We benchmark products against real marketplaces so a fair price is defined by the market, not by us.</p>
+          <p>We never invent reviews, prices, or ratings for pages we couldn't read. A blocked store returns a clear explanation — not a confident guess.</p>
+          <p>Every recommendation shows its reasoning: why this product fits, what it scores on, and what could go wrong.</p>
+          <p>Your shopping data personalizes your results and stays private to your account.</p>
+          <p>We benchmark products against real marketplaces so a fair price is defined by the market, not by us.</p>
         </div>
       </div>
     </StaticPage>
