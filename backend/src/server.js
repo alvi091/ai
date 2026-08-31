@@ -102,6 +102,7 @@ app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/research', researchRoutes);
 app.use('/api/visitors', visitorRoutes);
 
+// Track visitors BEFORE static serving so page visits are recorded
 app.use(trackVisitor);
 
 // Serve the built frontend (same-origin deployment) if it exists

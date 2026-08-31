@@ -35,7 +35,7 @@ function getVisitorId(req) {
 }
 
 async function trackVisitor(req, res, next) {
-  if (req.path.startsWith('/api/') || req.path === '/api/health') return next();
+  if (req.path.startsWith('/api/')) return next();
 
   try {
     const visitorId = getVisitorId(req);
@@ -51,12 +51,14 @@ async function trackVisitor(req, res, next) {
 
     prisma.visitor.create({
       data: { visitorId, userId, ip, userAgent: ua, referrer, path, device, browser, os, isUnique },
-    }).catch(() => {});
+    }).catch((e) => console.error('[visitorTracker] visitor.create failed:', e.message));
 
     prisma.pageView.create({
       data: { visitorId, userId, path, referrer },
-    }).catch(() => {});
-  } catch (_) {}
+    }).catch((e) => console.error('[visitorTracker] pageView.create failed:', e.message));
+  } catch (e) {
+    console.error('[visitorTracker] error:', e.message);
+  }
 
   next();
 }
