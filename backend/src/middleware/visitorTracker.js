@@ -46,8 +46,13 @@ async function trackVisitor(req, res, next) {
     const { device, browser, os } = parseUserAgent(ua);
     const userId = req.user?.id || null;
 
-    const existing = await prisma.visitor.findFirst({ where: { visitorId } });
-    const isUnique = !existing;
+    let isUnique = true;
+    try {
+      const existing = await prisma.visitor.findFirst({ where: { visitorId } });
+      isUnique = !existing;
+    } catch (_) {
+      isUnique = true;
+    }
 
     prisma.visitor.create({
       data: { visitorId, userId, ip, userAgent: ua, referrer, path, device, browser, os, isUnique },

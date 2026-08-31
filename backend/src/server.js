@@ -128,14 +128,41 @@ const start = async () => {
     console.log('Database connected');
 
     try {
-      const { execSync } = require('child_process');
-      execSync('npx prisma db push --skip-generate --accept-data-loss', {
-        timeout: 30000,
-        stdio: 'pipe',
-      });
-      console.log('Prisma schema synced');
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "Visitor" (
+          "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+          "visitorId" TEXT NOT NULL,
+          "userId" TEXT,
+          "ip" TEXT,
+          "userAgent" TEXT,
+          "referrer" TEXT,
+          "path" TEXT NOT NULL,
+          "country" TEXT,
+          "city" TEXT,
+          "device" TEXT,
+          "browser" TEXT,
+          "os" TEXT,
+          "isUnique" BOOLEAN DEFAULT true,
+          "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS "Visitor_visitorId_idx" ON "Visitor"("visitorId");
+        CREATE INDEX IF NOT EXISTS "Visitor_createdAt_idx" ON "Visitor"("createdAt");
+
+        CREATE TABLE IF NOT EXISTS "PageView" (
+          "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+          "visitorId" TEXT NOT NULL,
+          "userId" TEXT,
+          "path" TEXT NOT NULL,
+          "referrer" TEXT,
+          "duration" INTEGER,
+          "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS "PageView_visitorId_idx" ON "PageView"("visitorId");
+        CREATE INDEX IF NOT EXISTS "PageView_createdAt_idx" ON "PageView"("createdAt");
+      `);
+      console.log('Visitor/PageView tables verified');
     } catch (e) {
-      console.warn('prisma db push failed (non-fatal):', e.stderr?.toString() || e.message);
+      console.error('[startup] Table creation failed:', e.message);
     }
 
     app.listen(config.port, () => {
