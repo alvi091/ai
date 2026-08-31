@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { admin } from '../services/api';
 import {
   Users, Eye, Activity, AlertTriangle, ShoppingBag, Cpu, Clock, BarChart3,
@@ -110,11 +111,20 @@ function ErrorRow({ e }) {
 }
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [errPage, setErrPage] = useState(1);
   const [activeTab, setActiveTab] = useState('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [days, setDays] = useState(30);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+    if (!token || adminUser.role !== 'admin') {
+      navigate('/admin/login');
+    }
+  }, [navigate]);
 
   const { data: dashData, isLoading: dashLoading } = useQuery({
     queryKey: ['admin-analytics', days],
