@@ -45,6 +45,10 @@ const getDashboard = async (req, res) => {
     searchesToday,
     totalComparisons,
     totalWishlists,
+    uniqueVisitors,
+    totalAIRequests,
+    avgDurationResult,
+    errorCount,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { createdAt: { gte: todayStart } } }),
@@ -60,46 +64,74 @@ const getDashboard = async (req, res) => {
     prisma.analyticsEvent.count({ where: { eventType: 'search', createdAt: { gte: todayStart } } }),
     prisma.analyticsEvent.count({ where: { eventType: 'comparison', ...createdAtFilter } }),
     prisma.analyticsEvent.count({ where: { eventType: 'wishlist_add', ...createdAtFilter } }),
+    prisma.visitor.count().catch(() => 0),
+    prisma.analyticsEvent.count({ where: { eventType: { startsWith: 'ai_' }, ...createdAtFilter } }),
+    prisma.analyticsEvent.findMany({
+      where: { eventType: 'analysis_completed', ...createdAtFilter },
+      select: { data: true },
+      take: 1000,
+    }).then(events => {
+      const durations = [];
+      events.forEach(e => {
+        try { const d = JSON.parse(e.data || '{}'); if (d.durationMs) durations.push(d.durationMs); } catch {}
+      });
+      return durations.length ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0;
+    }),
+    prisma.systemError.count().catch(() => 0),
   ]);
 
-  const dau = await prisma.analyticsEvent.groupBy({
-    by: ['userId'],
-    where: { createdAt: { gte: todayStart }, userId: { not: null } },
-  }).then(r => r.length);
+  const days = parseInt(req.query.days) || 30;
+  const dailyAnalyses = [];
+  const dailyVisitors = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i + 1);
+    dailyAnalyses.push({ date: dayStart.toISOString().split('T')[0], count: 0 });
+    dailyVisitors.push({ date: dayStart.toISOString().split('T')[0], count: 0 });
+  }
 
-  const wau = await prisma.analyticsEvent.groupBy({
-    by: ['userId'],
-    where: { createdAt: { gte: weekAgo }, userId: { not: null } },
-  }).then(r => r.length);
-
-  const mau = await prisma.analyticsEvent.groupBy({
-    by: ['userId'],
-    where: { createdAt: { gte: monthAgo }, userId: { not: null } },
-  }).then(r => r.length);
-
-  const recentActivity = await prisma.analyticsEvent.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-    select: { eventType: true, data: true, createdAt: true, userId: true },
+  const analysisEvents = await prisma.analyticsEvent.findMany({
+    where: { eventType: { startsWith: 'analysis_' }, ...createdAtFilter },
+    select: { createdAt: true },
+  });
+  analysisEvents.forEach(e => {
+    const day = e.createdAt.toISOString().split('T')[0];
+    const bucket = dailyAnalyses.find(d => d.date === day);
+    if (bucket) bucket.count++;
   });
 
-  const topMarketplaces = await prisma.analyticsEvent.groupBy({
-    by: ['eventType'],
-    where: { eventType: { startsWith: 'analysis_' }, ...createdAtFilter },
-    _count: true,
-    orderBy: { _count: { eventType: 'desc' } },
-    take: 20,
+  const visitorEvents = await prisma.visitor.findMany({
+    where: Object.keys(range).length ? { createdAt: range } : {},
+    select: { createdAt: true },
+  }).catch(() => []);
+  visitorEvents.forEach(e => {
+    const day = e.createdAt.toISOString().split('T')[0];
+    const bucket = dailyVisitors.find(d => d.date === day);
+    if (bucket) bucket.count++;
   });
 
   res.json({
-    users: { total: totalUsers, today: newUsersToday, week: newUsersWeek, month: newUsersMonth },
-    active: { dau, wau, mau },
-    analyses: { total: totalAnalyses, today: analysesToday, week: analysesWeek, month: analysesMonth, successful: successfulAnalyses, failed: failedAnalyses, successRate: totalAnalyses > 0 ? Math.round((successfulAnalyses / totalAnalyses) * 100) : 0 },
-    searches: { total: totalSearches, today: searchesToday },
-    comparisons: { total: totalComparisons },
-    wishlists: { total: totalWishlists },
-    recentActivity,
-    topMarketplaces,
+    totalAnalyses,
+    analysesToday,
+    analysesWeek,
+    analysesMonth,
+    successfulAnalyses,
+    failedAnalyses,
+    successRate: totalAnalyses > 0 ? Math.round((successfulAnalyses / totalAnalyses) * 100) : 0,
+    totalUsers,
+    newUsersToday,
+    newUsersWeek,
+    newUsersMonth,
+    uniqueVisitors,
+    totalAIRequests,
+    avgDurationMs: avgDurationResult,
+    errorCount,
+    totalSearches,
+    searchesToday,
+    totalComparisons,
+    totalWishlists,
+    dailyAnalyses,
+    dailyVisitors,
   });
 };
 
@@ -150,7 +182,7 @@ const getUsers = async (req, res) => {
       totalSearches: u._count.searchHistory,
       totalWishlist: u._count.wishlist,
     })),
-    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   });
 };
 
@@ -222,12 +254,12 @@ const getAnalyses = async (req, res) => {
 
   if (marketplace) {
     const filtered = parsed.filter(e => e.parsed.marketplace === marketplace);
-    return res.json({ analyses: filtered, total: filtered.length, pagination: { page, limit, total: filtered.length, pages: Math.ceil(filtered.length / limit) } });
+    return res.json({ analyses: filtered, total: filtered.length, pagination: { page, limit, total: filtered.length, totalPages: Math.ceil(filtered.length / limit) } });
   }
 
   res.json({
     analyses: parsed,
-    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   });
 };
 
@@ -319,6 +351,25 @@ const getAIUsage = async (req, res) => {
   const p50 = durations.length ? durations[Math.floor(durations.length * 0.5)] : 0;
   const p95 = durations.length ? durations[Math.floor(durations.length * 0.95)] : 0;
 
+  const daily = [];
+  const now = new Date();
+  const days = parseInt(req.query.days) || 30;
+  for (let i = days - 1; i >= 0; i--) {
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i + 1);
+    daily.push({ date: dayStart.toISOString().split('T')[0], count: 0 });
+  }
+
+  const aiEvents = await prisma.analyticsEvent.findMany({
+    where: { eventType: { startsWith: 'ai_' }, ...createdAtFilter },
+    select: { createdAt: true },
+  });
+  aiEvents.forEach(e => {
+    const day = e.createdAt.toISOString().split('T')[0];
+    const bucket = daily.find(d => d.date === day);
+    if (bucket) bucket.count++;
+  });
+
   res.json({
     total,
     success: successCount,
@@ -326,7 +377,8 @@ const getAIUsage = async (req, res) => {
     avgDuration,
     p50Duration: p50,
     p95Duration: p95,
-    byType: byType.map(t => ({ type: t.eventType, count: t._count })),
+    byModel: byType.map(t => ({ model: t.eventType, count: t._count, avgDurationMs: avgDuration })),
+    daily,
   });
 };
 
@@ -359,7 +411,7 @@ const getErrors = async (req, res) => {
   res.json({
     errors,
     byCategory,
-    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   });
 };
 
@@ -471,10 +523,12 @@ const getDecisionStats = async (req, res) => {
   const total = verdicts.BUY_NOW + verdicts.WAIT + verdicts.NOT_RECOMMENDED + verdicts.other;
   res.json({
     total,
-    buy: verdicts.BUY_NOW,
-    wait: verdicts.WAIT,
-    avoid: verdicts.NOT_RECOMMENDED,
-    other: verdicts.other,
+    decisions: [
+      { verdict: 'BUY_NOW', count: verdicts.BUY_NOW },
+      { verdict: 'WAIT', count: verdicts.WAIT },
+      { verdict: 'NOT_RECOMMENDED', count: verdicts.NOT_RECOMMENDED },
+      { verdict: 'Other', count: verdicts.other },
+    ],
     buyPercent: total > 0 ? Math.round((verdicts.BUY_NOW / total) * 100) : 0,
     waitPercent: total > 0 ? Math.round((verdicts.WAIT / total) * 100) : 0,
     avoidPercent: total > 0 ? Math.round((verdicts.NOT_RECOMMENDED / total) * 100) : 0,
@@ -512,7 +566,7 @@ const getTopProducts = async (req, res) => {
     .sort((a, b) => b[1] - a[1])
     .map(([name, count]) => ({ name, count }));
 
-  res.json({ topCategories, topMarketplaces });
+  res.json({ products: topCategories.map(c => ({ name: c.name, count: c.count, marketplace: null, lastAnalyzed: null })), topMarketplaces });
 };
 
 module.exports = {

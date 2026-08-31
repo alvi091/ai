@@ -157,8 +157,8 @@ export default function AdminDashboard() {
     queryFn: () => admin.getErrors({ page: errPage, limit: 10 }).then((r) => r.data),
   });
 
-  const { data: decisionsData } = useQuery({
-    queryKey: ['admin-decisions', days],
+  const { data: decisionsListData } = useQuery({
+    queryKey: ['admin-decisionsList', days],
     queryFn: () => admin.getDecisions({ days }).then((r) => r.data),
   });
 
@@ -167,16 +167,16 @@ export default function AdminDashboard() {
     queryFn: () => admin.getTopProducts({ days, limit: 10 }).then((r) => r.data),
   });
 
-  const dashboard = dashData?.dashboard || {};
+  const dashboard = dashData || {};
   const users = usersData?.users || [];
   const analyses = analysesData?.analyses || [];
-  const totalAnalyses = analysesData?.pagination?.total || 0;
-  const marketplace = marketplaceData?.marketplace || [];
+  const totalAnalysesCount = analysesData?.pagination?.total || 0;
+  const marketplace = Array.isArray(marketplaceData) ? marketplaceData : [];
   const aiUsageDailyDaily = aiData?.daily || [];
   const errors = errorsData?.errors || [];
   const totalErrors = errorsData?.pagination?.total || 0;
-  const decisions = decisionsData?.decisions || [];
-  const topProds = topProducts?.products || [];
+  const decisionsListList = decisionsList?.decisionsList || [];
+  const topProds = topProducts || {};
 
   const tabs = [
     { key: 'overview', label: 'Overview' },
@@ -274,7 +274,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center gap-6">
                     <ResponsiveContainer width="50%" height={200}>
                       <PieChart>
-                        <Pie data={marketplace} dataKey="count" nameKey="marketplace" cx="50%" cy="50%" outerRadius={80} innerRadius={40} paddingAngle={3}>
+                        <Pie data={marketplace} dataKey="total" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={40} paddingAngle={3}>
                           {marketplace.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip content={<ChartTooltip />} />
@@ -284,8 +284,8 @@ export default function AdminDashboard() {
                       {marketplace.slice(0, 6).map((m, i) => (
                         <div key={i} className="flex items-center gap-3">
                           <div className="h-2.5 w-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                          <span className="flex-1 text-xs text-white/50">{m.marketplace}</span>
-                          <span className="text-xs font-medium text-white/70">{m.count}</span>
+                          <span className="flex-1 text-xs text-white/50">{m.name}</span>
+                          <span className="text-xs font-medium text-white/70">{m.total}</span>
                         </div>
                       ))}
                     </div>
@@ -316,15 +316,15 @@ export default function AdminDashboard() {
 
               {/* Decision Stats */}
               <Section title="Verdict Distribution">
-                {decisions.length > 0 ? (
+                {decisionsList.length > 0 ? (
                   <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={decisions}>
+                    <BarChart data={decisionsList}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                       <XAxis dataKey="verdict" tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.3)' }} />
                       <YAxis tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.3)' }} allowDecimals={false} />
                       <Tooltip content={<ChartTooltip />} />
                       <Bar dataKey="count" name="Count" radius={[4, 4, 0, 0]}>
-                        {decisions.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                        {decisionsList.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -441,23 +441,23 @@ export default function AdminDashboard() {
                     <tr className="border-b border-white/[0.06]">
                       <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/30">Marketplace</th>
                       <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/30">Total</th>
-                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/30">Unique URLs</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/30">Completed</th>
                       <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/30">Avg Duration</th>
-                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/30">Cache Rate</th>
-                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/30">Fail Rate</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/30">Success Rate</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-white/30">Failed</th>
                     </tr>
                   </thead>
                   <tbody>
                     {marketplace.map((m) => (
-                      <tr key={m.marketplace} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
-                        <td className="px-4 py-3 text-xs font-medium text-white/60">{m.marketplace}</td>
+                      <tr key={m.name} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+                        <td className="px-4 py-3 text-xs font-medium text-white/60">{m.name}</td>
                         <td className="px-4 py-3 text-xs text-white/50">{m.total}</td>
-                        <td className="px-4 py-3 text-xs text-white/40">{m.uniqueUrls}</td>
-                        <td className="px-4 py-3 text-xs text-white/40">{m.avgDurationMs ? `${(m.avgDurationMs / 1000).toFixed(1)}s` : '—'}</td>
-                        <td className="px-4 py-3 text-xs text-white/40">{m.cacheRate ? `${(m.cacheRate * 100).toFixed(0)}%` : '—'}</td>
+                        <td className="px-4 py-3 text-xs text-white/40">{m.completed}</td>
+                        <td className="px-4 py-3 text-xs text-white/40">{m.avgDuration ? `${(m.avgDuration / 1000).toFixed(1)}s` : '—'}</td>
+                        <td className="px-4 py-3 text-xs text-white/40">{m.successRate ? `${m.successRate}%` : '—'}</td>
                         <td className="px-4 py-3">
-                          <span className={`text-xs ${m.failRate > 0.1 ? 'text-rose-400' : 'text-white/40'}`}>
-                            {m.failRate ? `${(m.failRate * 100).toFixed(0)}%` : '—'}
+                          <span className={`text-xs ${m.failed > 0 ? 'text-rose-400' : 'text-white/40'}`}>
+                            {m.failed || 0}
                           </span>
                         </td>
                       </tr>
