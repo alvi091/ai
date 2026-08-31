@@ -160,13 +160,17 @@ function parseUA() {
 
 export function trackPageView(path) {
   const { device, browser, os } = parseUA();
+  const visitorId = getVisitorId();
+  const isFirstVisit = !sessionStorage.getItem('tracked');
+  sessionStorage.setItem('tracked', '1');
   return api.post('/visitors/track', {
-    visitorId: getVisitorId(),
+    visitorId,
     path,
     referrer: document.referrer || '',
     device,
     browser,
     os,
+    isFirstVisit,
   });
 }
 
