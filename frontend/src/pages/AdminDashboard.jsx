@@ -158,7 +158,7 @@ export default function AdminDashboard() {
   });
 
   const { data: decisionsListData } = useQuery({
-    queryKey: ['admin-decisionsList', days],
+    queryKey: ['admin-decisions', days],
     queryFn: () => admin.getDecisions({ days }).then((r) => r.data),
   });
 
@@ -175,7 +175,7 @@ export default function AdminDashboard() {
   const aiUsageDaily = aiData?.daily || [];
   const errors = errorsData?.errors || [];
   const totalErrors = errorsData?.pagination?.total || 0;
-  const decisionsListList = decisionsList?.decisionsList || [];
+  const decisionsList = decisionsListData?.decisions || [];
   const topProds = topProducts || {};
 
   const tabs = [
