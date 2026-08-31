@@ -3,6 +3,7 @@ import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Layout from './components/layout/Layout';
 import Logo from './components/ui/Logo';
+import { trackPageView } from './services/api';
 
 const Landing = lazy(() => import('./pages/Landing'));
 const Analyze = lazy(() => import('./pages/Analyze'));
@@ -52,11 +53,20 @@ function ScrollToTop() {
   return null;
 }
 
+function PageTracker() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    trackPageView(pathname).catch(() => {});
+  }, [pathname]);
+  return null;
+}
+
 function AppRoutes() {
   const location = useLocation();
   return (
     <>
       <ScrollToTop />
+      <PageTracker />
       <Layout>
         <AnimatePresence mode="wait" initial={false}>
           <Routes location={location} key={location.pathname}>

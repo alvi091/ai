@@ -171,4 +171,26 @@ router.get('/devices', getVisitorDevices);
 router.get('/recent', getRecentVisitors);
 router.get('/hourly', getHourlyTraffic);
 
+router.post('/track', asyncHandler(async (req, res) => {
+  const { visitorId, path, referrer, device, browser, os } = req.body;
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
+
+  try {
+    const existing = await prisma.visitor.findFirst({ where: { visitorId } });
+    const isUnique = !existing;
+
+    await prisma.visitor.create({
+      data: { visitorId, ip, userAgent: req.headers['user-agent'] || '', referrer: referrer || '', path: path || '/', device, browser, os, isUnique },
+    });
+
+    await prisma.pageView.create({
+      data: { visitorId, path: path || '/', referrer: referrer || '' },
+    });
+  } catch (e) {
+    console.error('[visitors/track] error:', e.message);
+  }
+
+  res.json({ ok: true });
+}));
+
 module.exports = router;

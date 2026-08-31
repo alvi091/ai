@@ -132,4 +132,42 @@ export const visitors = {
   getHourly: (days) => api.get('/visitors/hourly', { params: { days } }),
 };
 
+function getVisitorId() {
+  let vid = localStorage.getItem('visitorId');
+  if (vid) return vid;
+  vid = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36);
+  localStorage.setItem('visitorId', vid);
+  return vid;
+}
+
+function parseUA() {
+  const ua = navigator.userAgent || '';
+  let device = 'Desktop';
+  if (/mobile|android|iphone|ipad/i.test(ua)) device = /ipad|tablet/i.test(ua) ? 'Tablet' : 'Mobile';
+  let browser = 'Other';
+  if (/chrome/i.test(ua) && !/edge|opr/i.test(ua)) browser = 'Chrome';
+  else if (/firefox/i.test(ua)) browser = 'Firefox';
+  else if (/safari/i.test(ua) && !/chrome/i.test(ua)) browser = 'Safari';
+  else if (/edge/i.test(ua)) browser = 'Edge';
+  let os = 'Other';
+  if (/windows/i.test(ua)) os = 'Windows';
+  else if (/macintosh|mac os/i.test(ua)) os = 'macOS';
+  else if (/android/i.test(ua)) os = 'Android';
+  else if (/iphone|ipad|ipod/i.test(ua)) os = 'iOS';
+  else if (/linux/i.test(ua)) os = 'Linux';
+  return { device, browser, os };
+}
+
+export function trackPageView(path) {
+  const { device, browser, os } = parseUA();
+  return api.post('/visitors/track', {
+    visitorId: getVisitorId(),
+    path,
+    referrer: document.referrer || '',
+    device,
+    browser,
+    os,
+  });
+}
+
 export default api;
