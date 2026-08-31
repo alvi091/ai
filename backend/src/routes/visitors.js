@@ -122,14 +122,13 @@ const getRecentVisitors = asyncHandler(async (req, res) => {
     take: parseInt(limit),
     select: {
       id: true, visitorId: true, path: true, referrer: true, device: true, browser: true, os: true, isUnique: true, createdAt: true,
-      user: { select: { name: true, email: true } },
     },
   });
 
   res.json(visitors.map(v => ({
     id: v.id,
     visitorId: v.visitorId,
-    userName: v.user?.name || 'Guest',
+    userName: 'Guest',
     path: v.path,
     referrer: v.referrer || 'Direct',
     device: v.device,
