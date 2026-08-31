@@ -127,6 +127,17 @@ const start = async () => {
     await prisma.$connect();
     console.log('Database connected');
 
+    try {
+      const { execSync } = require('child_process');
+      execSync('npx prisma db push --skip-generate --accept-data-loss', {
+        timeout: 30000,
+        stdio: 'pipe',
+      });
+      console.log('Prisma schema synced');
+    } catch (e) {
+      console.warn('prisma db push failed (non-fatal):', e.stderr?.toString() || e.message);
+    }
+
     app.listen(config.port, () => {
       console.log(`Server running on port ${config.port} in ${config.nodeEnv} mode`);
     });
