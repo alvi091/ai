@@ -172,7 +172,7 @@ export default function AdminDashboard() {
   const analyses = analysesData?.analyses || [];
   const totalAnalysesCount = analysesData?.pagination?.total || 0;
   const marketplace = Array.isArray(marketplaceData) ? marketplaceData : [];
-  const aiUsageDailyDaily = aiData?.daily || [];
+  const aiUsageDaily = aiData?.daily || [];
   const errors = errorsData?.errors || [];
   const totalErrors = errorsData?.pagination?.total || 0;
   const decisionsListList = decisionsList?.decisionsList || [];
