@@ -14,6 +14,7 @@
 
 const { analyzeUrl } = require('../services/analyzeUrlService');
 const { readCache, writeCache, createJob, normalizeUrlForCache } = require('../services/jobQueue');
+const { trackAnalysis } = require('../services/analyticsTracker');
 const prisma = require('../database');
 
 const INLINE_MAX = parseInt(process.env.ANALYZE_INLINE_MAX, 10) || 3;
@@ -42,6 +43,15 @@ const analyzeUrlHandler = async (req, res, next) => {
     if (!refresh) {
       const cached = await readCache(normalizedUrl);
       if (cached && cached.ok) {
+        trackAnalysis({
+          userId: req.user?.id || null,
+          url,
+          marketplace: cached.site?.id || null,
+          status: 'completed',
+          durationMs: Date.now() - t0,
+          aiUsed: Boolean(cached.aiReport),
+          cacheHit: true,
+        });
         console.log(`[analyze] cache-hit ms=${Date.now() - t0} site=${cached.site && cached.site.id}`);
         return res.json({ ok: true, cached: true, ...cached });
       }
@@ -50,12 +60,35 @@ const analyzeUrlHandler = async (req, res, next) => {
     // 2. Capacity available -> run inline immediately (no "queued" state).
     if (inlineActive < INLINE_MAX) {
       inlineActive += 1;
+      const startedAt = Date.now();
       try {
         const result = await analyzeUrl({ url, prompt });
+        const durationMs = Date.now() - startedAt;
         if (result && result.ok) {
           await writeCache(normalizedUrl, result);
+          trackAnalysis({
+            userId: req.user?.id || null,
+            url,
+            marketplace: result.site?.id || null,
+            status: 'completed',
+            startedAt: new Date(startedAt),
+            completedAt: new Date(),
+            durationMs,
+            aiUsed: Boolean(result.aiReport),
+            cacheHit: false,
+          });
+        } else {
+          trackAnalysis({
+            userId: req.user?.id || null,
+            url,
+            status: 'failed',
+            startedAt: new Date(startedAt),
+            completedAt: new Date(),
+            durationMs,
+            failureCategory: result?.error || 'unknown',
+          });
         }
-        console.log(`[analyze] inline ms=${Date.now() - t0} site=${result && result.site && result.site.id} ok=${Boolean(result && result.ok)}`);
+        console.log(`[analyze] inline ms=${durationMs} site=${result && result.site && result.site.id} ok=${Boolean(result && result.ok)}`);
         return res.json(result);
       } finally {
         inlineActive -= 1;

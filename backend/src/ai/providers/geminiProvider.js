@@ -19,6 +19,7 @@ class GeminiProvider extends AIProviderInterface {
 
   async _call(prompt, schema = null, timeoutMs = 8000) {
     if (!this.ready || !this.model) throw new Error('Gemini not available');
+    const t0 = Date.now();
     let fullPrompt = prompt;
     if (schema) {
       fullPrompt = `${prompt}\n\nRespond with valid JSON only. Use this schema:\n${JSON.stringify(schema, null, 2)}`;
@@ -43,6 +44,10 @@ class GeminiProvider extends AIProviderInterface {
       }
     }
     if (text == null) throw lastErr || new Error('AI timed out');
+    try {
+      const { trackAIUsage } = require('../../services/analyticsTracker');
+      trackAIUsage({ requestType: 'general', model: 'gemini-3.6-flash', durationMs: Date.now() - t0, success: true });
+    } catch (_) {}
     if (schema) text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     return text;
   }

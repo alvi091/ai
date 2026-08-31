@@ -19,6 +19,7 @@ const SearchHistory = lazy(() => import('./pages/SearchHistory'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Settings = lazy(() => import('./pages/Settings'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 function Splash() {
@@ -80,6 +81,7 @@ function AppRoutes() {
             <Route path="history" element={<Suspense fallback={<Splash />}><SearchHistory /></Suspense>} />
             <Route path="profile" element={<Suspense fallback={<Splash />}><Profile /></Suspense>} />
             <Route path="settings" element={<Suspense fallback={<Splash />}><Settings /></Suspense>} />
+            <Route path="admin/login" element={<Suspense fallback={<Splash />}><AdminLogin /></Suspense>} />
             <Route path="admin" element={<Suspense fallback={<Splash />}><AdminDashboard /></Suspense>} />
             <Route path="about" element={<Suspense fallback={<Splash />}><About /></Suspense>} />
             <Route path="privacy" element={<Suspense fallback={<Splash />}><Privacy /></Suspense>} />

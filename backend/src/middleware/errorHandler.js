@@ -1,3 +1,5 @@
+const { trackError } = require('../services/analyticsTracker');
+
 const errorHandler = (err, req, res, _next) => {
   console.error('Error:', err);
 
@@ -12,6 +14,15 @@ const errorHandler = (err, req, res, _next) => {
 
   const statusCode = err.statusCode || 500;
   const message = err.statusCode ? err.message : 'Internal server error';
+
+  trackError({
+    userId: req.user?.id || null,
+    endpoint: req.originalUrl || req.url,
+    category: statusCode >= 500 ? 'server_error' : 'client_error',
+    statusCode,
+    message: message.slice(0, 500),
+    stack: err.stack,
+  });
 
   res.status(statusCode).json({ error: message });
 };

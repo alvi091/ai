@@ -341,3 +341,21 @@ model PageView {
   @@index([createdAt])
   @@index([path])
 }
+
+model SystemError {
+  id         String   @id @default(uuid())
+  userId     String?
+  endpoint   String
+  category   String
+  marketplace String?
+  statusCode Int?
+  message    String
+  stack      String?
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  @@index([category])
+  @@index([createdAt])
+  @@index([marketplace])
+  @@index([statusCode])
+}

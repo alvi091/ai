@@ -103,6 +103,17 @@ export const admin = {
   updatePrices: (updates) => api.post('/admin/prices', { updates }),
   promoteUser: (userId) => api.post(`/admin/promote/${userId}`),
   demoteUser: (userId) => api.post(`/admin/demote/${userId}`),
+  getAnalytics: (params) => api.get('/admin/analytics/dashboard', { params }),
+  getAnalyticsUsers: (params) => api.get('/admin/analytics/users', { params }),
+  getAnalyticsUserDetail: (id) => api.get(`/admin/analytics/users/${id}`),
+  getAnalyses: (params) => api.get('/admin/analytics/analyses', { params }),
+  getMarketplaceStats: (params) => api.get('/admin/analytics/marketplaces', { params }),
+  getAIUsage: (params) => api.get('/admin/analytics/ai-usage', { params }),
+  getErrors: (params) => api.get('/admin/analytics/errors', { params }),
+  getRetention: (params) => api.get('/admin/analytics/retention', { params }),
+  getActivity: (params) => api.get('/admin/analytics/activity', { params }),
+  getDecisions: (params) => api.get('/admin/analytics/decisions', { params }),
+  getTopProducts: (params) => api.get('/admin/analytics/top-products', { params }),
 };
 
 export const chat = {

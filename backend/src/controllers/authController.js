@@ -4,6 +4,7 @@ const prisma = require('../database');
 const { generateToken } = require('../utils/helpers');
 const { BadRequestError, UnauthorizedError } = require('../utils/errors');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { trackEvent, trackUserActivity } = require('../services/analyticsTracker');
 
 const signup = asyncHandler(async (req, res) => {
   const { email, password, name } = req.validatedBody;
@@ -15,6 +16,8 @@ const signup = asyncHandler(async (req, res) => {
     select: { id: true, email: true, name: true, role: true, createdAt: true },
   });
   const token = generateToken(user.id);
+  trackEvent(user.id, 'user_signup', { email });
+  trackUserActivity(user.id, 'activity', { type: 'signup' });
   res.status(201).json({ user, token });
 });
 
@@ -25,6 +28,7 @@ const login = asyncHandler(async (req, res) => {
   const isValid = await bcrypt.compare(password, user.password);
   if (!isValid) throw new UnauthorizedError('Invalid email or password');
   const token = generateToken(user.id);
+  trackUserActivity(user.id, 'login', { email });
   res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role }, token });
 });
 

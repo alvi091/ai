@@ -159,8 +159,24 @@ const start = async () => {
         );
         CREATE INDEX IF NOT EXISTS "PageView_visitorId_idx" ON "PageView"("visitorId");
         CREATE INDEX IF NOT EXISTS "PageView_createdAt_idx" ON "PageView"("createdAt");
+
+        CREATE TABLE IF NOT EXISTS "SystemError" (
+          "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+          "userId" TEXT,
+          "endpoint" TEXT NOT NULL,
+          "category" TEXT NOT NULL,
+          "marketplace" TEXT,
+          "statusCode" INTEGER,
+          "message" TEXT NOT NULL,
+          "stack" TEXT,
+          "metadata" TEXT,
+          "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS "SystemError_category_idx" ON "SystemError"("category");
+        CREATE INDEX IF NOT EXISTS "SystemError_createdAt_idx" ON "SystemError"("createdAt");
+        CREATE INDEX IF NOT EXISTS "SystemError_marketplace_idx" ON "SystemError"("marketplace");
       `);
-      console.log('Visitor/PageView tables verified');
+      console.log('Visitor/PageView/SystemError tables verified');
     } catch (e) {
       console.error('[startup] Table creation failed:', e.message);
     }
