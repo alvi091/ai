@@ -1,0 +1,189 @@
+name: Deploy to GCP Cloud Run
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ayymus-ai
+  REGION: us-central1
+
+jobs:
+  # --- Database Migration Job ---
+  migrate-db:
+    name: Prisma DB Migrate
+    runs-on: ubuntu-latest
+    needs: []
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Install Prisma
+        run: |
+          cd backend
+          npm install prisma
+
+      - name: Set up Google Cloud credentials
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          export_format: json
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Cloud SQL Proxy
+        env:
+          INSTANCE_CONNECTION_NAME: ${{ secrets.CLOUD_SQL_INSTANCE_CONNECTION_NAME }}
+        run: |
+          gcloud config set project ${{ env.PROJECT_ID }}
+          gcloud config set compute/region ${{ env.REGION }}
+
+      - name: Run Prisma Migrate
+        run: |
+          cd backend
+          npx prisma migrate deploy
+
+      - name: Generate Prisma Client
+        run: |
+          cd backend
+          npx prisma generate
+
+  # --- API Service Job ---
+  deploy-api:
+    name: Deploy API to Cloud Run
+    runs-on: ubuntu-latest
+    needs: migrate-db
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Set up Cloud credentials
+        uses: google-github-actions/auth@v2
+        with:
+          credentials: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Build and push API image
+        run: |
+          # Build the Docker image
+          cd backend
+          gcloud builds submit gcr.io/${{ env.PROJECT_ID }}/ayymus-api --tag gcr.io/${{ env.PROJECT_ID }}/ayymus-api
+
+      - name: Deploy API to Cloud Run
+        run: |
+          gcloud run deploy ayymus-api \
+            --image gcr.io/${{ env.PROJECT_ID }}/ayymus-api \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --cpu 1 \
+            --memory 1Gi \
+            --port 8080 \
+            --set-env-vars \
+              NODE_ENV=production,\
+              ANALYZE_QUEUE_ENABLED=true,\
+              ANALYZE_INLINE_MAX=2,\
+              ANALYSIS_CACHE_TTL_MS=43200000,\
+              RATE_LIMIT_WINDOW_MS=900000,\
+              RATE_LIMIT_MAX=3000
+
+  # --- Worker Service Job ---
+  deploy-worker:
+    name: Deploy Worker to Cloud Run
+    runs-on: ubuntu-latest
+    needs: deploy-api
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Set up Cloud credentials
+        uses: google-github-actions/auth@v2
+        with:
+          credentials: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Build and push Worker image
+        run: |
+          cd backend
+          gcloud builds submit gcr.io/${{ env.PROJECT_ID }}/ayymus-worker --tag gcr.io/${{ env.PROJECT_ID }}/ayymus-worker
+
+      - name: Deploy Worker to Cloud Run
+        run: |
+          gcloud run deploy ayymus-worker \
+            --image gcr.io/${{ env.PROJECT_ID }}/ayymus-worker \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --cpu 2 \
+            --memory 2Gi \
+            --port 8080 \
+            --set-env-vars \
+              NODE_ENV=production,\
+              ANALYZE_WORKER_CONCURRENCY=3,\
+              ANALYZE_GLOBAL_MAX=16,\
+              ANALYSIS_CACHE_TTL_MS=43200000,\
+              FLIPKART_MAX_REVIEWS=60,\
+              MYNTRA_MAX_REVIEWS=60,\
+              AMAZON_MAX_REVIEWS=0,\
+              AJIO_MAX_REVIEWS=0,\
+              NYKAA_MAX_REVIEWS=0,\
+              MEESHO_MAX_REVIEWS=0
+
+  # --- Frontend Job ---
+  deploy-frontend:
+    name: Deploy Frontend to Cloud Run
+    runs-on: ubuntu-latest
+    needs: [deploy-api, deploy-worker]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Set up Cloud credentials
+        uses: google-github-actions/auth@v2
+        with:
+          credentials: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Build and push Frontend image
+        run: |
+          cd frontend
+          gcloud builds submit gcr.io/${{ env.PROJECT_ID }}/ayymus-frontend --tag gcr.io/${{ env.PROJECT_ID }}/ayymus-frontend
+
+      - name: Deploy Frontend to Cloud Run
+        run: |
+          gcloud run deploy ayusus-frontend \
+            --image gcr.io/${{ env.PROJECT_ID }}/ayusus-frontend \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --cpu 1 \
+            --memory 512Mi \
+            --port 8080

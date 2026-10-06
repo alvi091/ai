@@ -81,8 +81,8 @@ function AppRoutes() {
             <Route path="history" element={<Suspense fallback={<Splash />}><SearchHistory /></Suspense>} />
             <Route path="profile" element={<Suspense fallback={<Splash />}><Profile /></Suspense>} />
             <Route path="settings" element={<Suspense fallback={<Splash />}><Settings /></Suspense>} />
-            <Route path="admin/login" element={<Suspense fallback={<Splash />}><AdminLogin /></Suspense>} />
-            <Route path="admin" element={<Suspense fallback={<Splash />}><AdminDashboard /></Suspense>} />
+            {/* <Route path="admin/login" element={<Suspense fallback={<Splash />}><AdminLogin /></Suspense>} /> */}
+            {/* <Route path="admin" element={<Suspense fallback={<Splash />}><AdminDashboard /></Suspense>} /> */}
             <Route path="about" element={<Suspense fallback={<Splash />}><About /></Suspense>} />
             <Route path="privacy" element={<Suspense fallback={<Splash />}><Privacy /></Suspense>} />
             <Route path="terms" element={<Suspense fallback={<Splash />}><Terms /></Suspense>} />
