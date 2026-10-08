@@ -38,6 +38,10 @@ const corsOptions = {
 
 const app = express();
 
+// Cloud Run sits behind Google's proxy — trust exactly one hop so
+// express-rate-limit sees the real client IP instead of a shared one.
+app.set('trust proxy', 1);
+
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(morgan('dev'));
