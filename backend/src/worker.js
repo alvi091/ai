@@ -1,37 +1,49 @@
 /*
- * Background worker process — Cloud Tasks + Cloud Run compatible.
+ * Background worker — Cloud Run service receiving Cloud Tasks pushes.
  *
- * No longer uses BullMQ. The API service (Cloud Run) receives analysis jobs
- * via POST /tasks/analyze, and workers can pull via Cloud Tasks lease API
- * or simply act as receivers. This worker stays connected to DB and is
- * ready to receive jobs through the API's task endpoint.
+ * Endpoints:
+ *   POST /tasks/analyze  — runs analyzeUrlService + writes AnalysisJob/AnalysisCache
+ *   GET  /tasks/health   — liveness/readiness
  *
- * Set env: CLOUD_TASKS_QUEUE_URL (from Secret Manager), ANALYZE_*,
- * NODE_ENV=production.
+ * Deploy with --no-allow-unauthenticated and point the Cloud Tasks queue's
+ * HTTP target at this service (OIDC token from CLOUD_TASKS_OIDC_SA).
+ * Set env: DATABASE_URL, GEMINI_API_KEY, CLOUD_TASKS_* (API side),
+ * NODE_ENV=production, PORT (8080 on Cloud Run).
  */
 
 require('dotenv').config();
 
-const prisma = require('./database');
+const express = require('express');
+const morgan = require('morgan');
+const tasksRouter = require('./routes/tasks');
+const { errorHandler } = require('./middleware/errorHandler');
 
-async function main() {
-  await prisma.$connect();
-  console.log('[worker] DB connected — ready for Cloud Tasks jobs');
+const config = require('./config');
 
-  // Keep the worker running; in production Cloud Run this process stays alive.
-  // Jobs are enqueued by the API service via createJob() -> POST /tasks/analyze.
-  // The worker can pull them via Cloud Tasks lease API or receive them
-  // through the API's task endpoint.
-  console.log('[worker] listening for Cloud Tasks jobs');
+const app = express();
+app.use(morgan('dev'));
+app.use(express.json({ limit: '10mb' }));
 
-  // Prevent instant exit in non-Cloud-Run environments
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('[worker] staying alive for development (press Ctrl+C to exit)');
-    setInterval(() => {}, 60000);
+app.get('/', (req, res) => res.json({ service: 'ayymus-worker' }));
+app.use('/tasks', tasksRouter);
+app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
+app.use(errorHandler);
+
+const start = async () => {
+  try {
+    const prisma = require('./database');
+    await prisma.$connect();
+    console.log('[worker] DB connected — ready for Cloud Tasks jobs');
+
+    app.listen(config.port, () => {
+      console.log(`[worker] listening on port ${config.port} (env=${config.nodeEnv})`);
+    });
+  } catch (error) {
+    console.error('[worker] failed to start:', error);
+    process.exit(1);
   }
-}
+};
 
-main().catch((e) => {
-  console.error('[worker] failed to start:', e);
-  process.exit(1);
-});
+start();
+
+module.exports = app;

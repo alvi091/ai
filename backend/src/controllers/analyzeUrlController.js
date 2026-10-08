@@ -7,18 +7,18 @@
  *   - Cache hit: return instantly (12h TTL).
  *   - Capacity available (inlineActive < INLINE_MAX): run inline, return result
  *     directly. The user sees no "queued" state — analysis starts immediately.
- *   - At capacity + Redis available: enqueue BullMQ job, return { jobId,
+ *   - At capacity + Cloud Tasks configured: enqueue job, return { jobId,
  *     status: "queued" }. The frontend polls GET /:jobId.
- *   - At capacity + no Redis: HTTP 429.
+ *   - At capacity + no queue: HTTP 429.
  */
 
 const { analyzeUrl } = require('../services/analyzeUrlService');
-const { readCache, writeCache, createJob, normalizeUrlForCache } = require('../services/jobQueue');
+const { readCache, writeCache, createJob, normalizeUrlForCache, queueConfigured } = require('../services/jobQueue');
 const { trackAnalysis } = require('../services/analyticsTracker');
 const prisma = require('../database');
 
 const INLINE_MAX = parseInt(process.env.ANALYZE_INLINE_MAX, 10) || 3;
-const queueEnabled = Boolean(process.env.REDIS_URL) && process.env.ANALYZE_QUEUE_ENABLED !== 'false';
+const queueEnabled = queueConfigured && process.env.ANALYZE_QUEUE_ENABLED !== 'false';
 let inlineActive = 0;
 
 function invalidUrl(url) {

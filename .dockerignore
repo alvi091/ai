@@ -1,0 +1,16 @@
+.git
+.github
+**/node_modules
+**/dist
+AiBuyingAgentMobile
+backend/data
+backend/*.log
+backend/start*.log
+**/.env
+**/.env.*
+!backend/.env.example
+!backend/.env.production.example
+render.yaml
+frontend/t_*.html
+frontend/t_*.css
+frontend/*.cjs

@@ -4,11 +4,15 @@
  * Replaces BullMQ + Redis with Google Cloud Tasks for job dispatching,
  * and uses in-process concurrency gating instead of a distributed Redis gate.
  *
- * Deployment:
- *   • API service (Cloud Run)   — exposes /tasks/endpoint to receive jobs
- *   • Worker (Cloud Run)        — pulls jobs via Cloud Tasks lease API
- *   • No Redis required; concurrency capped by Cloud Run instance count
- *   • Secrets: CLOUD_TASKS_QUEUE_URL set via Secret Manager
+ * Dispatch modes (both push the same payload to the worker's /tasks/analyze):
+ *   • CLOUD_TASKS_QUEUE set        — enqueue through the Cloud Tasks API
+ *     (retries + backoff; requires CLOUD_TASKS_WORKER_URL as the HTTP target
+ *     and CLOUD_TASKS_OIDC_SA for a private worker).
+ *   • only CLOUD_TASKS_WORKER_URL  — POST straight to the worker service.
+ *   • neither                      — queue disabled; caller falls back to 429.
+ *
+ * Secrets: CLOUD_TASKS_QUEUE / CLOUD_TASKS_WORKER_URL / CLOUD_TASKS_OIDC_SA
+ * via Secret Manager.
  */
 
 require('dotenv').config();
@@ -17,11 +21,17 @@ const prisma = require('../database');
 
 // --- Config --------------------------------------------------------------
 
-const CLOUD_TASKS_QUEUE_URL = process.env.CLOUD_TASKS_QUEUE_URL || '';
+const CLOUD_TASKS_QUEUE = process.env.CLOUD_TASKS_QUEUE || '';
+const CLOUD_TASKS_WORKER_URL = process.env.CLOUD_TASKS_WORKER_URL
+  || process.env.CLOUD_TASKS_QUEUE_URL
+  || '';
+const CLOUD_TASKS_OIDC_SA = process.env.CLOUD_TASKS_OIDC_SA || '';
 const CONCURRENCY = parseInt(process.env.ANALYZE_WORKER_CONCURRENCY, 10) || 3;
 const GLOBAL_MAX_ANALYSES = parseInt(process.env.ANALYZE_GLOBAL_MAX, 10) || 8;
 const JOB_TIMEOUT_MS = parseInt(process.env.ANALYZE_JOB_TIMEOUT_MS, 10) || 180000;
 const CACHE_TTL_MS = parseInt(process.env.ANALYSIS_CACHE_TTL_MS, 10) || 12 * 60 * 60 * 1000;
+
+const queueConfigured = Boolean(CLOUD_TASKS_QUEUE || CLOUD_TASKS_WORKER_URL);
 
 // Lightweight in-process semaphore to cap concurrent analyses per worker instance
 let activeCount = 0;
@@ -39,34 +49,68 @@ const semaphore = {
 };
 
 /**
- * Enqueue an analysis job into Cloud Tasks.
- * The Cloud Run API service must expose a /tasks/analyze endpoint that
- * receives the same payload shape and calls analyzeUrlService + writeCache.
+ * Enqueue an analysis job for the worker.
+ * The worker service exposes POST /tasks/analyze with this payload shape and
+ * runs analyzeUrl + writeCache, updating the AnalysisJob row by jobId.
+ * Returns the AnalysisJob id (pollable via GET /api/analyze/:jobId).
  */
 async function createJob({ url, normalizedUrl, prompt = null }) {
-  if (!CLOUD_TASKS_QUEUE_URL) {
-    console.warn('[jobQueue] CLOUD_TASKS_QUEUE_URL not set — job not enqueued');
+  if (!queueConfigured) {
+    console.warn('[jobQueue] Cloud Tasks not configured (CLOUD_TASKS_QUEUE / CLOUD_TASKS_WORKER_URL) — job not enqueued');
     return null;
   }
 
-  const taskUrl = new URL(CLOUD_TASKS_QUEUE_URL);
-  taskUrl.pathname = '/tasks/analyze';
-
-  const fetch = require('node-fetch').fetch || require('node-fetch')({});
-  await fetch(taskUrl.toString(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, normalizedUrl, prompt }),
+  const job = await prisma.analysisJob.create({
+    data: { url, normalizedUrl, status: 'queued' },
   });
 
-  // Also persist a lightweight job record for status tracking
-  try {
-    await prisma.analysisJob.create({
-      data: { id: `cloudtask-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, url, normalizedUrl, status: 'queued' },
-    });
-  } catch {}
+  const payload = { jobId: job.id, url, normalizedUrl, prompt };
 
-  return { id: `ct-${Date.now()}`, queuedAt: new Date() };
+  try {
+    if (CLOUD_TASKS_QUEUE) {
+      await enqueueCloudTask(payload);
+    } else {
+      await postDirect(payload);
+    }
+  } catch (err) {
+    await prisma.analysisJob.update({
+      where: { id: job.id },
+      data: { status: 'failed', error: `enqueue failed: ${err.message}` },
+    });
+    throw err;
+  }
+
+  return job.id;
+}
+
+// Cloud Tasks API — retries/backoff handled by the queue.
+async function enqueueCloudTask(payload) {
+  const { CloudTasksClient } = require('@google-cloud/tasks');
+  const client = new CloudTasksClient();
+
+  const task = {
+    httpRequest: {
+      httpMethod: 'POST',
+      url: `${CLOUD_TASKS_WORKER_URL.replace(/\/+$/, '')}/tasks/analyze`,
+      headers: { 'Content-Type': 'application/json' },
+      body: Buffer.from(JSON.stringify(payload)),
+      ...(CLOUD_TASKS_OIDC_SA
+        ? { oidcToken: { serviceAccountEmail: CLOUD_TASKS_OIDC_SA, audience: CLOUD_TASKS_WORKER_URL } }
+        : {}),
+    },
+  };
+
+  await client.createTask({ parent: CLOUD_TASKS_QUEUE, task });
+}
+
+// Fallback: direct POST to the worker service (no retries).
+async function postDirect(payload) {
+  const res = await fetch(`${CLOUD_TASKS_WORKER_URL.replace(/\/+$/, '')}/tasks/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`worker responded ${res.status}`);
 }
 
 /**
@@ -145,6 +189,7 @@ module.exports = {
   withGlobalGate,
   normalizeUrlForCache,
   isCacheable,
+  queueConfigured,
   CONCURRENCY,
   JOB_TIMEOUT_MS,
   CACHE_TTL_MS,

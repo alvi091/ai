@@ -1,53 +1,40 @@
-FROM node:20-alpine AS builder
+# syntax=docker/dockerfile:1
+# API image: Express server + built React SPA (same-origin) + Chromium.
+# Build context MUST be the repo root:
+#   gcloud builds submit --config=cloudbuild.yaml .
 
+# ---------- Frontend ----------
+FROM node:20-alpine AS frontend
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# ---------- Backend deps ----------
+FROM node:20-alpine AS backend
 WORKDIR /app
-
-# Install build dependencies
 COPY backend/package.json backend/package-lock.json ./
 RUN npm ci
-
-# Copy prisma schema and generate
 COPY backend/prisma ./prisma/
 RUN npx prisma generate
+COPY backend/ ./
+RUN npm prune --omit=dev
 
-# Copy source and build frontend
-COPY backend/ ./backend/
-COPY frontend/ ./frontend/
-
-# Build frontend
-WORKDIR ./frontend
-RUN npm ci && npm run build
-
-# Final stage
+# ---------- Runtime ----------
 FROM node:20-alpine
-
 WORKDIR /app
+ENV NODE_ENV=production \
+    PORT=8080 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# Set environment
-ENV NODE_ENV=production
-ENV PORT=8080
+COPY --from=backend /app /app
+# server.js resolves the SPA at <root>/frontend/dist by default
+COPY --from=frontend /frontend/dist ./frontend/dist
 
-# Install only production dependencies
-COPY --from=builder /app/backend/package.json ./
-RUN npm ci --omit=dev
+# Chromium + system libraries for the API-side crawlers
+RUN npx playwright install --with-deps chromium
 
-# Copy prisma migrations and schema for db push
-COPY --from=builder /app/backend/prisma ./prisma/
-RUN npx prisma generate
-
-# Copy built backend files
-COPY --from=builder /app/backend/src ./src
-COPY --from=builder /app/backend/config ./config
-
-# Copy built frontend static files
-COPY --from=builder /app/frontend/dist ./dist
-
-# Expose Cloud Run port
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:8080/api/health || exit 1
-
-# Start server
 CMD ["node", "src/server.js"]
