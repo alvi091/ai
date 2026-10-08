@@ -8,28 +8,18 @@ const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const { errorHandler } = require('./middleware/errorHandler');
 
-const authRoutes = require('./routes/auth');
-const productRoutes = require('./routes/products');
-const searchRoutes = require('./routes/search');
-const wishlistRoutes = require('./routes/wishlist');
-const compareRoutes = require('./routes/compare');
-const buyAnalysisRoutes = require('./routes/buyAnalysis');
-const decisionRoutes = require('./routes/decision');
-const reviewRoutes = require('./routes/reviews');
-const dashboardRoutes = require('./routes/dashboard');
-const adminRoutes = require('./routes/admin');
-const amazonRoutes = require('./routes/amazon');
-const analyzeRoutes = require('./routes/analyze');
-const chatRoutes = require('./routes/chat');
-const marketplaceRoutes = require('./routes/marketplace');
-const researchRoutes = require('./routes/research');
-const visitorRoutes = require('./routes/visitors');
-const { trackVisitor } = require('./middleware/visitorTracker');
+// CORS configuration for Cloud Run + Frontend
+const corsOptions = {
+  origin: ['https://ayymus.com', 'https://calm-alpaca-d6135f.netlify.app'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+};
 
 const app = express();
 
-app.use(helmet());
-app.use(cors({ origin: config.cors.origin, credentials: true }));
+// Apply CORS BEFORE other middleware
+app.use(cors(corsOptions));
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
