@@ -2,9 +2,10 @@
 # API image: Express server + built React SPA (same-origin) + Chromium.
 # Build context MUST be the repo root:
 #   gcloud builds submit --config=cloudbuild.yaml .
+# Debian base (not Alpine) — Playwright only ships browser deps for Debian/Ubuntu.
 
 # ---------- Frontend ----------
-FROM node:20-alpine AS frontend
+FROM node:20-bookworm-slim AS frontend
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
@@ -12,7 +13,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ---------- Backend deps ----------
-FROM node:20-alpine AS backend
+FROM node:20-bookworm-slim AS backend
 WORKDIR /app
 COPY backend/package.json backend/package-lock.json ./
 RUN npm ci
@@ -22,7 +23,7 @@ COPY backend/ ./
 RUN npm prune --omit=dev
 
 # ---------- Runtime ----------
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8080 \
