@@ -74,7 +74,9 @@ module.exports = {
     queueEnabled: process.env.ANALYZE_QUEUE_ENABLED !== 'false',
     // Max concurrent inline analyses on a single web instance (guard against
     // OOM when the queue is unavailable). Saturated requests get HTTP 429.
-    inlineMax: parseInt(process.env.ANALYZE_INLINE_MAX, 10) || 3,
+    inlineMax: Number.isNaN(parseInt(process.env.ANALYZE_INLINE_MAX, 10))
+      ? 3
+      : parseInt(process.env.ANALYZE_INLINE_MAX, 10),
     // Best-effort cap on ACTIVE analyses across ALL worker instances (shared
     // via Redis). Bunches a bit on nodes churn but keeps browsers from
     // exhausting memory on the box.

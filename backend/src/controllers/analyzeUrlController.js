@@ -17,7 +17,10 @@ const { readCache, writeCache, createJob, normalizeUrlForCache, queueConfigured 
 const { trackAnalysis } = require('../services/analyticsTracker');
 const prisma = require('../database');
 
-const INLINE_MAX = parseInt(process.env.ANALYZE_INLINE_MAX, 10) || 3;
+// Note: parseInt(...) || 3 would turn an explicit 0 into 3 — 0 is a valid
+// value (force queue mode), so check NaN explicitly instead.
+const parsedInlineMax = parseInt(process.env.ANALYZE_INLINE_MAX, 10);
+const INLINE_MAX = Number.isNaN(parsedInlineMax) ? 3 : parsedInlineMax;
 const queueEnabled = queueConfigured && process.env.ANALYZE_QUEUE_ENABLED !== 'false';
 let inlineActive = 0;
 
