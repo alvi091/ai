@@ -47,9 +47,10 @@ jobs:
 
       - name: Deploy API to Cloud Run
         run: |
-          gcloud run services update ayymus-api \
+          gcloud run deploy ayymus-api \
             --region ${{ env.REGION }} \
             --image ${{ env.REGISTRY }}/ayymus-api:${{ github.sha }} \
+            --allow-unauthenticated \
             --add-cloudsql-instances ${{ env.CLOUD_SQL_INSTANCE }} \
             --vpc-connector ${{ env.VPC_CONNECTOR }} \
             --vpc-egress private-ranges-only \
@@ -75,9 +76,10 @@ jobs:
 
       - name: Deploy Worker to Cloud Run (private)
         run: |
-          gcloud run services update ayymus-worker \
+          gcloud run deploy ayymus-worker \
             --region ${{ env.REGION }} \
             --image ${{ env.REGISTRY }}/ayymus-worker:${{ github.sha }} \
+            --no-allow-unauthenticated \
             --add-cloudsql-instances ${{ env.CLOUD_SQL_INSTANCE }} \
             --vpc-connector ${{ env.VPC_CONNECTOR }} \
             --vpc-egress private-ranges-only \
@@ -93,7 +95,15 @@ jobs:
               AJIO_MAX_REVIEWS=0,\
               NYKAA_MAX_REVIEWS=0,\
               MEESHO_MAX_REVIEWS=0 \
-            --update-secrets \
+            --set-secrets \
               DATABASE_URL=${{ env.SECRET_DATABASE_URL }},\
               GEMINI_API_KEY=${{ env.SECRET_GEMINI_API_KEY }},\
               REDIS_URL=${{ env.SECRET_REDIS_URL }}
+
+      # Cloud Tasks pushes with an OIDC token from this SA -> must be able to invoke the worker
+      - name: Let the API invoke the worker
+        run: |
+          gcloud run services add-iam-policy-binding ayymus-worker \
+            --region ${{ env.REGION }} \
+            --member="serviceAccount:ayymus-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
+            --role="roles/run.invoker"
