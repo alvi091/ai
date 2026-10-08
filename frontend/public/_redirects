@@ -1,1 +1,4 @@
+# Proxy API calls to Cloud Run (same-origin — avoids CORS entirely)
+/api/*   https://ayymus-api-1005268354682.asia-south1.run.app/api/:splat   200
+
 /*    /index.html   200
