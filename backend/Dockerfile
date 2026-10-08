@@ -27,6 +27,7 @@ FROM node:20-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8080 \
+    FRONTEND_DIST_PATH=/app/frontend/dist \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 COPY --from=backend /app /app
