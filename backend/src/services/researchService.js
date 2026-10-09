@@ -26,7 +26,7 @@ function hostnameOf(url) {
  * Best-effort: any failure keeps the snippet untouched. Bounded to stay well
  * inside the caller's research timeout.
  */
-async function enrichFindings(findings, { maxReads = 3, timeoutMs = 12000 } = {}) {
+async function enrichFindings(findings, { maxReads = 3, timeoutMs = 20000 } = {}) {
   if (!reachClient.available()) return findings;
   const targets = findings.filter((f) => f.sourceUrl).slice(0, maxReads);
   await Promise.allSettled(
@@ -49,8 +49,9 @@ async function enrichFindings(findings, { maxReads = 3, timeoutMs = 12000 } = {}
           f.read = true;
           f.readSource = (data && data.source) || 'web';
         }
-      } catch {
+      } catch (err) {
         // keep the search snippet
+        console.warn(`[research] page read skipped for ${f.sourceUrl}: ${err.message}`);
       }
     })
   );
