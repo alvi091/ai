@@ -55,24 +55,9 @@ jobs:
             --vpc-connector ${{ env.VPC_CONNECTOR }} \
             --vpc-egress private-ranges-only \
             --cpu 2 --memory 2Gi --min-instances 1 --max-instances 4 \
-            --set-env-vars \
-              NODE_ENV=production,\
-              ANALYZE_QUEUE_ENABLED=true,\
-              ANALYZE_INLINE_MAX=2,\
-              ANALYSIS_CACHE_TTL_MS=43200000,\
-              RATE_LIMIT_WINDOW_MS=900000,\
-              RATE_LIMIT_MAX=3000,\
-              FLIPKART_MAX_REVIEWS=60,\
-              MYNTRA_MAX_REVIEWS=60,\
-              CORS_ORIGIN=https://ayymus.com \
-            --update-secrets \
-              DATABASE_URL=${{ env.SECRET_DATABASE_URL }},\
-              JWT_SECRET=${{ env.SECRET_JWT_SECRET }},\
-              GEMINI_API_KEY=${{ env.SECRET_GEMINI_API_KEY }},\
-              REDIS_URL=${{ env.SECRET_REDIS_URL }},\
-              CLOUD_TASKS_QUEUE=${{ env.SECRET_CLOUD_TASKS_QUEUE }},\
-              CLOUD_TASKS_WORKER_URL=${{ env.SECRET_CLOUD_TASKS_WORKER_URL }},\
-              CLOUD_TASKS_OIDC_SA=${{ env.SECRET_CLOUD_TASKS_OIDC_SA }}
+            --service-account ayymus-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --set-env-vars "NODE_ENV=production,ANALYZE_QUEUE_ENABLED=true,ANALYZE_INLINE_MAX=2,ANALYSIS_CACHE_TTL_MS=43200000,RATE_LIMIT_WINDOW_MS=900000,RATE_LIMIT_MAX=3000,FLIPKART_MAX_REVIEWS=60,MYNTRA_MAX_REVIEWS=60,CORS_ORIGIN=https://ayymus.com" \
+            --update-secrets "DATABASE_URL=${{ env.SECRET_DATABASE_URL }},JWT_SECRET=${{ env.SECRET_JWT_SECRET }},GEMINI_API_KEY=${{ env.SECRET_GEMINI_API_KEY }},REDIS_URL=${{ env.SECRET_REDIS_URL }},CLOUD_TASKS_QUEUE=${{ env.SECRET_CLOUD_TASKS_QUEUE }},CLOUD_TASKS_WORKER_URL=${{ env.SECRET_CLOUD_TASKS_WORKER_URL }},CLOUD_TASKS_OIDC_SA=${{ env.SECRET_CLOUD_TASKS_OIDC_SA }}"
 
       - name: Deploy Worker to Cloud Run (private)
         run: |
@@ -84,21 +69,8 @@ jobs:
             --vpc-connector ${{ env.VPC_CONNECTOR }} \
             --vpc-egress private-ranges-only \
             --cpu 2 --memory 4Gi --concurrency 4 --max-instances 3 \
-            --set-env-vars \
-              NODE_ENV=production,\
-              ANALYZE_WORKER_CONCURRENCY=3,\
-              ANALYZE_GLOBAL_MAX=6,\
-              ANALYSIS_CACHE_TTL_MS=43200000,\
-              FLIPKART_MAX_REVIEWS=60,\
-              MYNTRA_MAX_REVIEWS=60,\
-              AMAZON_MAX_REVIEWS=0,\
-              AJIO_MAX_REVIEWS=0,\
-              NYKAA_MAX_REVIEWS=0,\
-              MEESHO_MAX_REVIEWS=0 \
-            --set-secrets \
-              DATABASE_URL=${{ env.SECRET_DATABASE_URL }},\
-              GEMINI_API_KEY=${{ env.SECRET_GEMINI_API_KEY }},\
-              REDIS_URL=${{ env.SECRET_REDIS_URL }}
+            --set-env-vars "NODE_ENV=production,ANALYZE_WORKER_CONCURRENCY=3,ANALYZE_GLOBAL_MAX=6,ANALYSIS_CACHE_TTL_MS=43200000,FLIPKART_MAX_REVIEWS=60,MYNTRA_MAX_REVIEWS=60,AMAZON_MAX_REVIEWS=0,AJIO_MAX_REVIEWS=0,NYKAA_MAX_REVIEWS=0,MEESHO_MAX_REVIEWS=0" \
+            --set-secrets "DATABASE_URL=${{ env.SECRET_DATABASE_URL }},GEMINI_API_KEY=${{ env.SECRET_GEMINI_API_KEY }},REDIS_URL=${{ env.SECRET_REDIS_URL }}"
 
       # Cloud Tasks pushes with an OIDC token from this SA -> must be able to invoke the worker
       - name: Let the API invoke the worker
