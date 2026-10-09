@@ -46,8 +46,17 @@ jobs:
           gcloud builds submit --config=cloudbuild.yaml \
             --substitutions=_REGION=${{ env.REGION }},_TAG=${{ github.sha }} .
 
+      - name: Deploy Agent Reach service to Cloud Run (private)
+        run: |
+          gcloud run deploy ayymus-reach \
+            --region ${{ env.REGION }} \
+            --image ${{ env.REGISTRY }}/ayymus-reach:${{ github.sha }} \
+            --no-allow-unauthenticated \
+            --memory 1Gi --cpu 1 --concurrency 4 --timeout 120 --min-instances 0
+
       - name: Deploy API to Cloud Run
         run: |
+          REACH_URL=$(gcloud run services describe ayymus-reach --region ${{ env.REGION }} --format='value(status.url)')
           gcloud run deploy ayymus-api \
             --region ${{ env.REGION }} \
             --image ${{ env.REGISTRY }}/ayymus-api:${{ github.sha }} \
@@ -57,7 +66,7 @@ jobs:
             --vpc-egress private-ranges-only \
             --cpu 2 --memory 2Gi --min-instances 1 --max-instances 4 \
             --service-account ayymus-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
-            --set-env-vars "NODE_ENV=production,ANALYZE_QUEUE_ENABLED=true,ANALYZE_INLINE_MAX=2,ANALYSIS_CACHE_TTL_MS=43200000,RATE_LIMIT_WINDOW_MS=900000,RATE_LIMIT_MAX=3000,FLIPKART_MAX_REVIEWS=60,MYNTRA_MAX_REVIEWS=60,CORS_ORIGIN=https://ayymus.com" \
+            --set-env-vars "NODE_ENV=production,ANALYZE_QUEUE_ENABLED=true,ANALYZE_INLINE_MAX=2,ANALYSIS_CACHE_TTL_MS=43200000,RATE_LIMIT_WINDOW_MS=900000,RATE_LIMIT_MAX=3000,FLIPKART_MAX_REVIEWS=60,MYNTRA_MAX_REVIEWS=60,CORS_ORIGIN=https://ayymus.com,REACH_BASE_URL=${REACH_URL}" \
             --update-secrets "DATABASE_URL=${{ env.SECRET_DATABASE_URL }},JWT_SECRET=${{ env.SECRET_JWT_SECRET }},GEMINI_API_KEY=${{ env.SECRET_GEMINI_API_KEY }},REDIS_URL=${{ env.SECRET_REDIS_URL }},CLOUD_TASKS_QUEUE=${{ env.SECRET_CLOUD_TASKS_QUEUE }},CLOUD_TASKS_WORKER_URL=${{ env.SECRET_CLOUD_TASKS_WORKER_URL }},CLOUD_TASKS_OIDC_SA=${{ env.SECRET_CLOUD_TASKS_OIDC_SA }}"
 
       - name: Deploy Worker to Cloud Run (private)
@@ -74,9 +83,13 @@ jobs:
             --set-secrets "DATABASE_URL=${{ env.SECRET_DATABASE_URL }},GEMINI_API_KEY=${{ env.SECRET_GEMINI_API_KEY }},REDIS_URL=${{ env.SECRET_REDIS_URL }}"
 
       # Cloud Tasks pushes with an OIDC token from this SA -> must be able to invoke the worker
-      - name: Let the API invoke the worker
+      - name: Let the API invoke the worker and reach services
         run: |
           gcloud run services add-iam-policy-binding ayymus-worker \
+            --region ${{ env.REGION }} \
+            --member="serviceAccount:ayymus-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
+            --role="roles/run.invoker"
+          gcloud run services add-iam-policy-binding ayymus-reach \
             --region ${{ env.REGION }} \
             --member="serviceAccount:ayymus-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
             --role="roles/run.invoker"

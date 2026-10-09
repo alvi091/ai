@@ -1,4 +1,4 @@
-# Cloud Build — builds both images into Artifact Registry.
+# Cloud Build — builds all images into Artifact Registry.
 # Run from repo root:
 #   gcloud builds submit --config=cloudbuild.yaml \
 #     --substitutions=_REGION=asia-south1,_TAG=latest .
@@ -25,9 +25,19 @@ steps:
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/ayymus/ayymus-worker:${_TAG}'
       - '.'
 
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'reach/Dockerfile'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/ayymus/ayymus-reach:${_TAG}'
+      - '.'
+
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/ayymus/ayymus-api:${_TAG}'
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/ayymus/ayymus-worker:${_TAG}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/ayymus/ayymus-reach:${_TAG}'
 
 options:
   logging: CLOUD_LOGGING_ONLY
