@@ -37,3 +37,10 @@ ios/build/
 # Editor
 .vscode/
 .idea/
+
+# Local Netlify folder
+.netlify
+
+# Python (reach service)
+__pycache__/
+*.pyc
