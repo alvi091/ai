@@ -321,13 +321,13 @@ async def search(req: SearchRequest):
     if code != 0 and not out.strip():
         raise HTTPException(
             status_code=502,
-            detail=f"mcporter/exa failed: {(err or out)[:300]}",
+            detail=f"mcporter/exa failed: {(err or out)[:800]}",
         )
     data = parse_json_loose(out)
     if data is None:
         raise HTTPException(
             status_code=502,
-            detail=f"exa returned unparseable output: {(out or err)[:300]}",
+            detail=f"exa returned unparseable output: {(out or err)[:800]}",
         )
 
     results = []

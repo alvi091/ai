@@ -7,12 +7,18 @@ FROM python:3.12-slim-bookworm
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    NODE_VERSION=20.18.1 \
     PORT=8080
 
-# Node.js + npm (mcporter -> Exa search MCP), curl (Jina Reader / installers)
+# curl/ca-certificates (Jina Reader, installers) + official Node 20 binary.
+# mcporter needs modern Node — Debian bookworm only ships Node 18, which
+# crashes mcporter on JSON module imports.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl nodejs npm \
-    && rm -rf /var/lib/apt/lists/*
+      ca-certificates curl xz-utils \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
+       | tar -xJ -C /usr/local --strip-components=1 \
+    && node --version && npm --version
 
 # Agent Reach from GitHub — the PyPI package named "agent-reach" is a DIFFERENT
 # project (README explicitly warns about it).
@@ -20,8 +26,11 @@ COPY reach/requirements.txt /tmp/reach-requirements.txt
 RUN pip install -r /tmp/reach-requirements.txt \
     && pip install "https://github.com/Panniantong/agent-reach/archive/main.zip"
 
-# MCP client used by Agent Reach's Exa search channel
-RUN npm install -g mcporter
+# MCP client used by Agent Reach's Exa search channel, plus the Exa MCP server
+# registration (doctor reports "Exa 未配置" without this step).
+RUN npm install -g mcporter \
+    && timeout 120 mcporter config add exa https://mcp.exa.ai/mcp --scope home \
+    && timeout 60 mcporter config list
 
 # Configure the zero-config channels (web/Jina, YouTube/yt-dlp, RSS, Exa/mcporter).
 # `timeout` guards the build against an installer waiting on a prompt.
