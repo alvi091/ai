@@ -86,6 +86,13 @@ module.exports = {
   redis: {
     url: process.env.REDIS_URL || '',
   },
+  // Private `ayymus-reach` Cloud Run service (Agent Reach capability channels:
+  // Jina page reads, Exa search, yt-dlp transcripts, RSS). Injected by the
+  // deploy pipeline. Empty => those features are off and callers fall back to
+  // the existing Bright Data / Gemini paths.
+  reach: {
+    baseUrl: (process.env.REACH_BASE_URL || '').replace(/\/+$/, ''),
+  },
   amazon: {
     rapidApiKey: process.env.RAPIDAPI_KEY || '',
     rapidApiHost: process.env.RAPIDAPI_HOST || 'real-time-amazon-data.p.rapidapi.com',

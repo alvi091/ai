@@ -3,6 +3,52 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, X, Send, Bot, User, Loader2 } from 'lucide-react';
 import { chat } from '../services/api';
 
+const TOOL_LABELS = {
+  web_search: 'Searched the web',
+  read_url: 'Read a page',
+  research_product: 'Ran product research',
+  scrape_product: 'Scraped the listing',
+  youtube_transcript: 'Read the transcript',
+};
+
+function traceDetail(t) {
+  const args = t.args || {};
+  if (args.query) return args.query;
+  if (args.productName) return args.productName;
+  if (args.url) {
+    try { return new URL(args.url).hostname.replace(/^www\./, ''); } catch { /* fall through */ }
+  }
+  return '';
+}
+
+function ToolTrace({ trace }) {
+  if (!trace || trace.length === 0) return null;
+  return (
+    <div className="mb-2 flex flex-wrap gap-1.5">
+      {trace.map((t, i) => {
+        const detail = traceDetail(t);
+        return (
+          <span
+            key={i}
+            title={t.ok ? `${t.ms}ms` : (t.detail || 'failed')}
+            className={`inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${
+              t.ok
+                ? 'border-teal-500/30 bg-teal-500/10 text-teal-300'
+                : 'border-red-500/30 bg-red-500/10 text-red-300'
+            }`}
+          >
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${t.ok ? 'bg-teal-400' : 'bg-red-400'}`} />
+            <span className="truncate">
+              {t.ok ? (TOOL_LABELS[t.tool] || t.tool) : `${TOOL_LABELS[t.tool] || t.tool} failed`}
+              {detail ? ` · ${detail}` : ''}
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ProductChat({ analysis }) {
   const [isOpen, setIsOpen] = useState(false);
   const [sessionId, setSessionId] = useState(null);
@@ -57,7 +103,11 @@ export default function ProductChat({ analysis }) {
         content: userMsg,
         analysis,
       });
-      setMessages((prev) => [...prev, { role: 'assistant', content: res.data.response }]);
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: res.data.response,
+        trace: res.data.toolTrace || [],
+      }]);
     } catch (err) {
       setMessages((prev) => [...prev, {
         role: 'assistant',
@@ -163,6 +213,7 @@ export default function ProductChat({ analysis }) {
                         : 'bg-white/5 text-white/80 rounded-bl-md'
                     }`}
                   >
+                    <ToolTrace trace={msg.trace} />
                     {msg.content}
                   </div>
                   {msg.role === 'user' && (

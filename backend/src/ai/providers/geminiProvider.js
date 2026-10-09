@@ -5,16 +5,34 @@ class GeminiProvider extends AIProviderInterface {
   constructor() {
     super();
     this.model = null;
+    this.genAI = null;
+    this.modelName = 'gemini-3.6-flash';
     this.ready = false;
     try {
       const { GoogleGenerativeAI } = require('@google/generative-ai');
       if (!config.gemini.apiKey) throw new Error('Gemini API key not configured');
       const genAI = new GoogleGenerativeAI(config.gemini.apiKey);
-      this.model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
+      this.genAI = genAI;
+      this.model = genAI.getGenerativeModel({ model: this.modelName });
       this.ready = true;
     } catch (e) {
       console.warn('Gemini init failed:', e.message);
     }
+  }
+
+  /**
+   * Native function-calling chat handle for the product-chat agent.
+   * The caller drives the loop: sendMessage(text | [{functionResponse}]) and
+   * reads response.functionCalls() / response.text().
+   */
+  createChat({ systemInstruction = '', history = [], tools = [] } = {}) {
+    if (!this.ready || !this.genAI) throw new Error('Gemini not available');
+    const model = this.genAI.getGenerativeModel({
+      model: this.modelName,
+      systemInstruction: systemInstruction || undefined,
+      tools: tools && tools.length ? [{ functionDeclarations: tools }] : undefined,
+    });
+    return model.startChat({ history });
   }
 
   async _call(prompt, schema = null, timeoutMs = 8000) {

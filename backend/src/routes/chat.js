@@ -40,11 +40,13 @@ router.post('/:sessionId/message', async (req, res) => {
 
     await addMessage({ sessionId, role: 'user', content });
 
-    const response = await generateResponse({ sessionId, userMessage: content, analysis });
+    const generated = await generateResponse({ sessionId, userMessage: content, analysis });
+    const text = typeof generated === 'string' ? generated : generated.text;
+    const toolTrace = (generated && generated.trace) || [];
 
-    await addMessage({ sessionId, role: 'assistant', content: response });
+    await addMessage({ sessionId, role: 'assistant', content: text });
 
-    res.json({ ok: true, response });
+    res.json({ ok: true, response: text, toolTrace });
   } catch (err) {
     console.error('[chat] message error:', err.message);
     res.status(500).json({ error: 'Failed to process message' });

@@ -10,6 +10,52 @@
 const AIService = require('../ai/AIService');
 const config = require('../config');
 const prisma = require('../database');
+const reachClient = require('./reachClient');
+
+function hostnameOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read the pages behind the top findings (Agent Reach /web + /youtube) so the
+ * agent works from actual page content instead of search snippets.
+ * Best-effort: any failure keeps the snippet untouched. Bounded to stay well
+ * inside the caller's research timeout.
+ */
+async function enrichFindings(findings, { maxReads = 3, timeoutMs = 12000 } = {}) {
+  if (!reachClient.available()) return findings;
+  const targets = findings.filter((f) => f.sourceUrl).slice(0, maxReads);
+  await Promise.allSettled(
+    targets.map(async (f) => {
+      try {
+        if (/youtube\.com|youtu\.be/.test(f.sourceUrl)) {
+          const data = await reachClient.youtubeTranscript(f.sourceUrl, Math.max(timeoutMs, 20000));
+          const text = String((data && data.transcript) || '').replace(/\s+/g, ' ').trim();
+          if (text.length > 80) {
+            f.finding = text.slice(0, 600);
+            f.read = true;
+            f.readSource = 'youtube';
+          }
+          return;
+        }
+        const data = await reachClient.readPage(f.sourceUrl, timeoutMs);
+        const text = String((data && data.text) || '').replace(/\s+/g, ' ').trim();
+        if (text.length > 80) {
+          f.finding = text.slice(0, 600);
+          f.read = true;
+          f.readSource = (data && data.source) || 'web';
+        }
+      } catch {
+        // keep the search snippet
+      }
+    })
+  );
+  return findings;
+}
 
 /**
  * Real web search via Bright Data SERP API.
@@ -17,7 +63,26 @@ const prisma = require('../database');
  * Falls back to Gemini simulation if SERP API key is not configured.
  */
 async function webSearch(query, numResults = 5) {
-  // 1. Try Bright Data SERP API (real Google results)
+  // 1. Exa via ayymus-reach — Agent Reach's zero-config semantic search
+  if (reachClient.available()) {
+    try {
+      const data = await reachClient.webSearch(query, numResults, 20000);
+      const results = (data && Array.isArray(data.results) ? data.results : [])
+        .filter((r) => r && r.url)
+        .map((r) => ({
+          title: r.title || '',
+          url: r.url,
+          snippet: r.snippet || '',
+          domain: hostnameOf(r.url),
+        }));
+      if (results.length > 0) return results;
+      console.warn('[research] Exa returned no results, falling back to SERP');
+    } catch (err) {
+      console.warn('[research] Exa search failed, falling back to SERP:', err.message);
+    }
+  }
+
+  // 2. Bright Data SERP API (real Google results)
   if (config.serpApi?.key) {
     try {
       const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en&gl=in&num=${numResults}`;
@@ -54,7 +119,7 @@ async function webSearch(query, numResults = 5) {
     }
   }
 
-  // 2. Fallback: Gemini simulation (when SERP API key not configured)
+  // 3. Fallback: Gemini simulation (when SERP API key not configured)
   try {
     const ai = AIService.create('gemini');
     const prompt = `Search the web for: "${query}". Return a JSON array of objects with fields: title, url, snippet, domain. Return ONLY the JSON array, no other text. Limit to ${numResults} results.`;
@@ -89,7 +154,7 @@ async function researchProduct({ productUrl, productName, brand, category }) {
         productName,
         sourceUrl: item.url || null,
         sourceTitle: item.title || null,
-        sourceDomain: item.url ? new URL(item.url).hostname : null,
+        sourceDomain: hostnameOf(item.url),
         sourceType: detectSourceType(item.url, item.domain),
         finding: item.snippet || item.title || '',
         relevance: 0.8,
@@ -97,6 +162,10 @@ async function researchProduct({ productUrl, productName, brand, category }) {
       });
     }
   }
+
+  // Read the top result pages (Agent Reach) so findings carry page content
+  // rather than only search snippets. Best-effort and time-boxed.
+  await enrichFindings(findings);
 
   return findings;
 }
